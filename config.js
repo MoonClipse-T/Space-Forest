@@ -16,7 +16,7 @@ window.CONFIG = {
   interact_range: { value: 2.6, min: 1.5, max: 5, step: 0.1 },   // how near a thing must be to act on it
 
   zoom_min: { value: 0.7, min: 0.4, max: 1, step: 0.05 },         // closest view, times the normal distance
-  zoom_max: { value: 5, min: 1.5, max: 8, step: 0.5 },            // farthest view: the whole village as a map
+  zoom_max: { value: 8, min: 1.5, max: 12, step: 0.5 },           // farthest view: the whole journey as a map
   zoom_step: { value: 1.4, min: 1.1, max: 2, step: 0.05 },        // how much one press of the zoom buttons changes the view
 
   // Getting and building
@@ -31,7 +31,7 @@ window.CONFIG = {
   first_prank_min: { value: 180, min: 0, max: 600, step: 10 },   // seconds before bots may prank the player (the brief: 3 to 5 minutes)
   bot_prank_chance: { value: 0.3, min: 0, max: 1, step: 0.05 },  // chance a bot pranks instead of working, when it can
   stash_min_dist: { value: 10, min: 3, max: 30, step: 1 },       // how far a taken thing must be carried before hiding it
-  chest_count: { value: 6, min: 0, max: 11, step: 1 },            // treasure chests to hide things in
+  chest_count: { value: 4, min: 0, max: 6, step: 1 },             // treasure chests to hide things in, in each era
   repair_hits: { value: 3, min: 1, max: 8, step: 1 },            // good presses to tighten the screws
   repair_speed: { value: 0.75, min: 0.2, max: 2, step: 0.05 },   // needle turns per second
   repair_window: { value: 0.2, min: 0.05, max: 0.5, step: 0.01 },// part of the dial that counts as a hit
@@ -39,7 +39,7 @@ window.CONFIG = {
   bot_fix_time: { value: 6, min: 1, max: 30, step: 1 },          // seconds a bot needs to fix its workshop
 
   // Bot friends (the stand-in for classmates)
-  bot_count: { value: 12, min: 0, max: 14, step: 1 },
+  bot_count: { value: 29, min: 0, max: 29, step: 1 },            // 29 bots and you: a class of 30
   bot_plan_time: { value: 150, min: 5, max: 600, step: 5 },      // seconds a bot spends writing its plan
   bot_approve_time: { value: 20, min: 0, max: 300, step: 5 },    // seconds until a bot's plan is stamped
   bot_shop_time: { value: 36, min: 1, max: 120, step: 1 },       // seconds a bot spends getting one item

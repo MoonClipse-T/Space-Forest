@@ -290,8 +290,8 @@ function makeLaunch() {
   const sign = label('발사대', 2.6, 0.8, '#5a4a7a', '#fffaf0'); sign.position.set(3.8, 1.3, 3.4); g.add(sign); g.add(mesh(cyl(0.07, 0.07, 1, 6), mat(WOOD), 3.8, 0.5, 3.38));
   return g;
 }
-function makePad(spot, color, name) {
-  const g = new THREE.Group(); g.position.set(spot.x, 0, spot.z);
+function makePad(spot, color, name, k = 1) {
+  const g = new THREE.Group(); g.position.set(spot.x, 0, spot.z); g.scale.setScalar(k);
   const c = new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.55);
   g.add(mesh(cyl(2.7, 2.8, 0.14, 30), mat(c.getHex()), 0, 0.07, 0));
   const rim = mesh(geo('prim', () => new THREE.TorusGeometry(2.7, 0.1, 8, 36)), mat(color), 0, 0.14, 0); rim.rotation.x = Math.PI / 2; g.add(rim);
@@ -324,6 +324,169 @@ function makeBush(x, z) {
   return g;
 }
 
+// ---- The three early eras: villagers, workshops, the things each kid makes ------------------
+const STONE = 0xbdb3a0, DARK = 0x4a3d55, BRASS = 0xe0b450, BRICK = 0xd98a6c;
+function makeVillager(era, k) { // a grown-up kid in the era's clothes: fur and a feather, a straw hat, a top hat and goggles
+  const g = makeKid({ shirt: [[0xc8a27a, 0xb98a5e, 0xd9b38c, 0xa97c50], [0xf3efe2, 0xe9e0c8, 0xf5f0e0, 0xdcd3bc], [0x8a6fae, 0x6f8fae, 0xae6f7a, 0x5f7a6a]][era][k % 4], hair: k % 4, hairColor: HAIR[(k * 2 + era) % HAIR.length] });
+  const h = g.userData.head;
+  if (era === 0) { const b = mesh(geo('band', () => new THREE.TorusGeometry(0.55, 0.06, 8, 24)), mat(0xff8a73), 0, 0.18, 0); b.rotation.x = Math.PI / 2 - 0.2; h.add(b); const f = mesh(geo('feather', () => new THREE.ConeGeometry(0.09, 0.6, 8)), mat([0xffd166, 0x7cc6fe, 0xff8fa3, 0x95e1a3][k % 4]), 0.25, 0.65, -0.3); f.rotation.z = -0.4; h.add(f); }
+  if (era === 1) { const brim = mesh(cyl(0.95, 0.95, 0.05, 28), mat(0xe8c66a), 0, 0.45, 0); brim.rotation.x = -0.15; h.add(brim); h.add(mesh(geo('strawtop', () => new THREE.ConeGeometry(0.5, 0.45, 20)), mat(0xe8c66a), 0, 0.68, -0.05)); }
+  if (era === 2) { h.add(mesh(cyl(0.38, 0.38, 0.62, 20), mat(0x3d3550), 0, 0.82, -0.05)); h.add(mesh(cyl(0.62, 0.62, 0.05, 24), mat(0x3d3550), 0, 0.52, -0.05)); h.add(mesh(cyl(0.39, 0.39, 0.1, 20), mat(0xff8a73), 0, 0.6, -0.05)); [-1, 1].forEach(s => { const gl = mesh(geo('goggle', () => new THREE.TorusGeometry(0.13, 0.04, 8, 16)), mat(BRASS), s * 0.2, 0.3, 0.45); h.add(gl); }); }
+  g.scale.setScalar(1.18); return g;
+}
+function eraPart(id) { // the thing a kid makes in each early era, standing on their work spot
+  const g = new THREE.Group(); g.userData.live = null;
+  if (id === 'st_fire') {
+    for (let i = 0; i < 7; i++) { const a = i / 7 * 6.28; g.add(mesh(ball(0.2), mat(0x9d9384), Math.cos(a) * 0.62, 0.12, Math.sin(a) * 0.62)); }
+    [0, 1, 2].forEach(i => { const l = mesh(cap(0.09, 0.8), mat(0x9a6a45), 0, 0.22, 0); l.rotation.z = Math.PI / 2; l.rotation.y = i * 1.05; g.add(l); });
+    const live = new THREE.Group(); g.add(live); g.userData.live = live;
+    live.add(mesh(geo('flame1', () => new THREE.ConeGeometry(0.34, 0.95, 12)), glow(0xff9a3c), 0, 0.72, 0)); live.add(mesh(geo('flame2', () => new THREE.ConeGeometry(0.18, 0.6, 10)), glow(0xffe680), 0, 0.62, 0.05));
+  } else if (id === 'st_axe') {
+    g.add(mesh(cyl(0.42, 0.48, 0.55, 14), mat(0xb98a5e), 0, 0.27, 0)); g.add(mesh(cyl(0.38, 0.38, 0.04, 14), mat(0xe9d2a8), 0, 0.56, 0));
+    const ax = new THREE.Group(); ax.position.set(0, 0.95, 0); ax.rotation.z = 0.35; g.add(ax);
+    ax.add(mesh(cyl(0.05, 0.06, 1.0, 8), mat(0x9a6a45))); const hd = mesh(rbox(0.5, 0.32, 0.14, 0.06), mat(0x8f93a8), 0.18, 0.4, 0); hd.rotation.z = -0.3; ax.add(hd);
+  } else if (id === 'st_wall') {
+    const s = mesh(rbox(1.6, 2.1, 0.35, 0.16), mat(0xc9b9a0), 0, 1.05, 0); g.add(s);
+    const moon = mesh(geo('crescent', () => new THREE.TorusGeometry(0.26, 0.07, 6, 16, Math.PI * 1.2)), glow(0xfff1d6), -0.3, 1.5, 0.19); moon.rotation.z = 1.2; g.add(moon);
+    [[0.3, 1.7], [0.5, 1.2], [0.1, 1.0], [-0.4, 0.8], [0.45, 0.6]].forEach(([x, y]) => g.add(mesh(starGeo(0.1, 0.02), glow(0xffd166), x, y, 0.19)));
+    [-0.5, 0.5].forEach(x => { const hand = mesh(ball(0.1), mat(0xff8a73), x, 0.35, 0.18); hand.scale.set(1, 1.2, 0.3); g.add(hand); });
+  } else if (id === 'ir_tool') {
+    g.add(mesh(rbox(0.9, 0.5, 0.5, 0.1), mat(0x4d4a5e), 0, 0.25, 0)); g.add(mesh(rbox(1.1, 0.2, 0.5, 0.08), mat(0x5d5a70), 0, 0.58, 0));
+    const live = new THREE.Group(); g.add(live); g.userData.live = live; live.add(mesh(rbox(0.6, 0.08, 0.14, 0.03), glow(0xff8a3c), 0, 0.72, 0));
+    const sk = mesh(geo('sickle', () => new THREE.TorusGeometry(0.35, 0.05, 6, 16, Math.PI)), mat(0xb9c2e6), -0.2, 1.05, 0); sk.rotation.z = 0.6; g.add(sk); g.add(mesh(cyl(0.05, 0.05, 0.5, 6), mat(0x9a6a45), 0.15, 0.85, 0));
+  } else if (id === 'ir_cal') {
+    const d = mesh(cyl(0.85, 0.85, 0.22, 28), mat(0xcfc6b3), 0, 1.0, 0); d.rotation.x = Math.PI / 2; g.add(d);
+    for (let i = 0; i < 12; i++) { const a = i / 12 * 6.28; g.add(mesh(ball(0.07), mat(DARK), Math.cos(a) * 0.68, 1.0 + Math.sin(a) * 0.68, 0.12)); }
+    g.add(mesh(ball(0.2), glow(0xfff1d6), 0, 1.0, 0.13)); g.add(mesh(rbox(0.5, 0.2, 0.4, 0.06), mat(0xb3a993), 0, 0.1, 0));
+  } else if (id === 'ir_tower') {
+    const t = mesh(geo('cheom', () => new THREE.LatheGeometry([[0, 0], [0.7, 0], [0.66, 0.45], [0.52, 1.1], [0.4, 1.6], [0.38, 1.85], [0, 1.85]].map(p => new THREE.Vector2(p[0], p[1])), 22)), mat(0xd8cdb6), 0, 0, 0); g.add(t);
+    g.add(mesh(rbox(0.9, 0.16, 0.9, 0.04), mat(0xc4b89e), 0, 1.92, 0)); g.add(mesh(rbox(0.26, 0.26, 0.1, 0.04), mat(DARK), 0, 0.95, 0.56));
+    [0.35, 0.7, 1.3].forEach(y => { const r = mesh(geo('cring' + y, () => new THREE.TorusGeometry(0.66 - y * 0.17, 0.025, 4, 22)), mat(0xb3a993), 0, y, 0); r.rotation.x = Math.PI / 2; g.add(r); });
+  } else if (id === 'in_scope') {
+    [0, 1, 2].forEach(i => { const l = mesh(cyl(0.035, 0.035, 1.3, 6), mat(0x9a6a45), Math.cos(i * 2.1) * 0.3, 0.6, Math.sin(i * 2.1) * 0.3); l.rotation.z = Math.cos(i * 2.1) * 0.25; l.rotation.x = -Math.sin(i * 2.1) * 0.25; g.add(l); });
+    const tube = new THREE.Group(); tube.position.set(0, 1.25, 0); tube.rotation.x = -0.6; g.add(tube);
+    tube.add(mesh(cyl(0.13, 0.17, 1.4, 16), mat(BRASS), 0, 0.2, 0)); tube.add(mesh(cyl(0.18, 0.18, 0.08, 16), mat(0x9a6a45), 0, 0.85, 0)); tube.add(mesh(cyl(0.12, 0.12, 0.02, 16), mat(GLASS), 0, 0.9, 0));
+  } else if (id === 'in_steam') {
+    const b = mesh(cap(0.38, 0.6), mat(0x6f5f7f), 0, 0.5, 0); b.rotation.z = Math.PI / 2; g.add(b);
+    g.add(mesh(cyl(0.12, 0.14, 0.9, 10), mat(0x4a4060), 0.35, 1.15, 0));
+    const gear = new THREE.Group(); gear.position.set(-0.25, 0.55, 0.45); g.add(gear); gear.add(mesh(cyl(0.3, 0.3, 0.1, 16), mat(BRASS), 0, 0, 0)); gear.children[0].rotation.x = Math.PI / 2;
+    for (let i = 0; i < 8; i++) { const a = i / 8 * 6.28; gear.add(mesh(rbox(0.12, 0.12, 0.1, 0.02), mat(BRASS), Math.cos(a) * 0.34, Math.sin(a) * 0.34, 0)); }
+    g.userData.gear = gear;
+    const live = new THREE.Group(); g.add(live); g.userData.live = live;
+    [0, 1, 2].forEach(i => { const p = mesh(ball(0.16 + i * 0.05), mat(0xffffff), 0.35 + i * 0.08, 1.75 + i * 0.32, 0); p.userData.k = i; live.add(p); });
+  } else if (id === 'in_rocket') {
+    [-1, 1].forEach(k => g.add(mesh(cyl(0.04, 0.04, 2.2, 6), mat(0x8a8fb0), k * 0.4, 1.1, 0)));
+    g.add(mesh(rbox(1.0, 0.08, 0.2, 0.03), mat(0x8a8fb0), 0, 2.15, 0));
+    const r = new THREE.Group(); r.position.y = 0.5; g.add(r);
+    r.add(mesh(cyl(0.11, 0.11, 1.1, 12), mat(0xfff5e1), 0, 0.6, 0)); r.add(mesh(geo('noseS', () => new THREE.ConeGeometry(0.11, 0.3, 12)), mat(0xff6b6b), 0, 1.3, 0));
+    [0, 1, 2].forEach(i => { const f = mesh(rbox(0.04, 0.3, 0.2, 0.02), mat(0xff6b6b), Math.cos(i * 2.1) * 0.12, 0.15, Math.sin(i * 2.1) * 0.12); f.rotation.y = -i * 2.1; r.add(f); });
+  } else return null;
+  return g;
+}
+const PROJECT_AT = [[-1.0, 0.35], [1.0, 0.35], [0, -0.85]]; // where the three things stand on an early-era work spot
+function makeProject(era, color) { // what stands on a kid's work spot: a rocket in the space era, three things before it
+  if (era === 3) return makeRocket(color);
+  const g = new THREE.Group(), tilt = new THREE.Group(); g.add(tilt);
+  const ghost = mesh(cyl(1.5, 1.5, 0.04, 24), geo('ghostM', () => bend(new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.16, depthWrite: false }))), 0, 0.2, 0); tilt.add(ghost);
+  const p = {}, live = [];
+  PARTS.filter(q => q.era === era).forEach((q, i) => { const m = eraPart(q.id); m.position.set(PROJECT_AT[i][0], 0.14, PROJECT_AT[i][1]); m.visible = false; tilt.add(m); p[q.id] = m; if (m.userData.live) live.push(m); });
+  const scribble = new THREE.Group(); scribble.visible = false; const on = ERAS[era].doodle.on, at = PROJECT_AT[PARTS.filter(q => q.era === era).findIndex(q => q.id === on)];
+  scribble.position.set(at[0], 0.14, at[1] + 0.3); tilt.add(scribble);
+  [[0.3, 1.2], [-0.35, 0.8], [0.05, 1.6], [-0.2, 1.3], [0.4, 0.6]].forEach(([x, y], i) => { const s = mesh(ball(0.16), mat(ERAS[era].doodle.color), x, y, 0.05); s.scale.set(1.5, 0.6 + i * 0.1, 0.3); s.rotation.z = i; scribble.add(s); });
+  g.userData = { parts: p, tilt, ghost, scribble, live };
+  return g;
+}
+function makeEraShop(s) { // a hide-and-rock hut, a thatched hut or a brick workshop, with its thing on the roof
+  const g = new THREE.Group(); g.position.set(s.x, 0, s.z); let top = 4.4;
+  if (s.era === 0) {
+    const r = mesh(ball(1), mat(0xd6c8ae), 0, 0.4, 0); r.scale.set(3.4, 2.7, 2.6); g.add(r);
+    const d = mesh(ball(1), mat(DARK), 0, 0.4, 1.7); d.scale.set(0.9, 1.4, 0.6); g.add(d);
+    [[-2.2, 1.6], [2.4, 1.2], [-1, -1.6]].forEach(([x, z]) => g.add(mesh(ball(0.5), mat(0xc4b597), x, 0.3, z)));
+    [-1, 1].forEach(k => { const t = mesh(cyl(0.08, 0.08, 1.6, 6), mat(0x9a6a45), k * 1.6, 0.8, 2.0); g.add(t); g.add(mesh(geo('flame1', () => new THREE.ConeGeometry(0.34, 0.95, 12)), glow(0xff9a3c), k * 1.6, 1.85, 2.0)); });
+    top = 3.6;
+  } else if (s.era === 1) {
+    g.add(mesh(cyl(2.9, 3.0, 2.3, 24), mat(0xf3e6c8), 0, 1.15, 0));
+    g.add(mesh(geo('thatch', () => new THREE.ConeGeometry(3.9, 2.6, 24)), mat(0xe8c66a), 0, 3.4, 0));
+    g.add(mesh(rbox(1.2, 1.8, 0.2, 0.3), mat(WOOD), 0, 0.9, 2.9));
+    top = 5.0;
+  } else {
+    g.add(mesh(rbox(6.2, 3.6, 4.6, 0.3), mat(BRICK), 0, 1.8, 0)); g.add(mesh(rbox(6.6, 0.4, 5.0, 0.15), mat(0x8f6f8f), 0, 3.75, 0));
+    g.add(mesh(cyl(0.45, 0.55, 2.4, 14), mat(0xb5655a), 2.1, 5.0, -1.2));
+    [-1, 1].forEach(k => { g.add(mesh(rbox(1.1, 1.0, 0.12, 0.08), mat(GLASS), k * 2.0, 2.2, 2.31)); g.add(mesh(rbox(1.3, 0.14, 0.2, 0.05), mat(0xfff5e1), k * 2.0, 1.66, 2.35)); });
+    g.add(mesh(rbox(1.3, 2.2, 0.2, 0.2), mat(0x5d5a70), 0, 1.1, 2.3)); top = 4.6;
+  }
+  const sign = label(s.name, 4.2, 0.8, '#fffaf0', '#5a4a7a'); sign.position.set(0, 2.85, 3.2); g.add(sign);
+  [-1, 1].forEach(k => g.add(mesh(cyl(0.06, 0.06, 2.6, 6), mat(WOOD), k * 1.9, 1.3, 3.15)));
+  const emb = eraPart(PARTS.find(p => p.shop === s.id).id); emb.position.set(0, top, 0.6); emb.scale.setScalar(1.2); g.add(emb);
+  return g;
+}
+function makeGate(e) { // the time gate: an arch with a shimmering curtain that only opens when the teacher has said OK
+  const g = new THREE.Group(); g.position.set(0, 0, GATE_Z[e]);
+  const pillar = [0xb3a993, 0x9a8a70, 0xb5655a][e];
+  [-1, 1].forEach(k => { g.add(mesh(rbox(1.0, 5.2, 1.0, 0.25), mat(pillar), k * 3.3, 2.6, 0)); g.add(mesh(starGeo(0.35, 0.1), glow(0xffd166), k * 3.3, 5.5, 0.2)); });
+  const arch = mesh(geo('garch', () => new THREE.TorusGeometry(3.3, 0.38, 10, 30, Math.PI)), mat(pillar), 0, 5.1, 0); g.add(arch);
+  const curtain = mesh(geo('gcurt', () => new THREE.PlaneGeometry(5.6, 6.2)), new THREE.MeshBasicMaterial({ color: 0xff8fc8, transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false }), 0, 3.1, 0); bend(curtain.material); g.add(curtain);
+  const lock = new THREE.Group(); lock.position.set(0, 2.3, 0.15); g.add(lock);
+  lock.add(mesh(rbox(0.9, 0.75, 0.3, 0.12), mat(0xffd166))); const sh = mesh(geo('shack', () => new THREE.TorusGeometry(0.28, 0.08, 8, 16, Math.PI)), mat(0xb9c2e6), 0, 0.38, 0); lock.add(sh);
+  const sign = label('시간의 문 · ' + ERAS[e + 1].name + '로', 5.0, 0.8, '#5a4a7a', '#fffaf0'); sign.position.set(0, 6.6, 0.3); g.add(sign);
+  // the wall either side: rocks, a reed fence, an iron railing
+  for (let x = 4.6; x < 46; x += 1.6) [-1, 1].forEach(k => {
+    if (e === 0) g.add(mesh(ball(0.75), mat(0xc4b597), k * x, 0.5, (x * 7) % 3 * 0.15));
+    if (e === 1) { g.add(mesh(cyl(0.09, 0.09, 1.7, 6), mat(0xd9b860), k * x, 0.85, 0)); g.add(mesh(rbox(1.7, 0.12, 0.1, 0.03), mat(0xc9a850), k * x, 1.2, 0)); }
+    if (e === 2) { g.add(mesh(cyl(0.07, 0.07, 1.8, 6), mat(0x4a4060), k * x, 0.9, 0)); g.add(mesh(rbox(1.7, 0.1, 0.08, 0.03), mat(0x4a4060), k * x, 1.6, 0)); g.add(mesh(ball(0.12), mat(BRASS), k * x, 1.85, 0)); }
+  });
+  g.userData = { curtain, lock };
+  return g;
+}
+function makeMammoth() { // a woolly friend who wanders the stone age
+  const g = new THREE.Group(), fur = mat(0xa0785a); g.add(shadow(2.0));
+  const body = mesh(ball(1.6), fur, 0, 2.2, 0); body.scale.set(1.0, 0.95, 1.35); g.add(body);
+  const head = mesh(ball(1.05), fur, 0, 2.9, 1.9); g.add(head); g.add(mesh(ball(0.5), fur, 0, 3.9, 1.6));
+  face(g, 3.0, 2.85, 1.4, 0.32);
+  const trunk = [mesh(cap(0.28, 0.6), fur, 0, 2.3, 2.75), mesh(cap(0.22, 0.5), fur, 0, 1.55, 2.95)]; trunk.forEach(t => g.add(t)); trunk[1].rotation.x = 0.4;
+  [-1, 1].forEach(k => { const t = mesh(geo('tusk', () => new THREE.TorusGeometry(0.6, 0.11, 8, 16, Math.PI * 0.8)), mat(0xfff5e1), k * 0.5, 2.0, 2.4); t.rotation.y = Math.PI / 2; t.rotation.z = -0.3; g.add(t);
+    const ear = mesh(ball(0.55), mat(0x8a6448), k * 0.95, 3.0, 1.55); ear.scale.set(0.35, 1, 0.9); g.add(ear); });
+  const legs = []; [[-0.7, 0.8], [0.7, 0.8], [-0.7, -0.9], [0.7, -0.9]].forEach(([x, z]) => { const l = mesh(cap(0.38, 0.7), fur, x, 0.7, z); g.add(l); legs.push(l); });
+  g.userData.legs = legs; return g;
+}
+function makeEraDecor(scene) { // landmarks that say which era this is, and things that move
+  const anim = [];
+  // 석기: a cave, a dolmen with stars cut in it, a wandering mammoth
+  const z0 = ERA_Z[0];
+  const cave = new THREE.Group(); cave.position.set(30, 0, z0 + 8); scene.add(cave);
+  const rock = mesh(ball(1), mat(0xc9bba4), 0, 0.6, 0); rock.scale.set(6.5, 5, 5.5); cave.add(rock);
+  const hole = mesh(ball(1), mat(0x3a2f45), -2.8, 0.6, 3.4); hole.scale.set(1.6, 2.6, 1.2); cave.add(hole);
+  const dol = new THREE.Group(); dol.position.set(-10, 0, z0 - 23); scene.add(dol);
+  [-1, 1].forEach(k => dol.add(mesh(rbox(0.7, 1.6, 1.4, 0.2), mat(STONE), k * 1.0, 0.8, 0)));
+  const slab = mesh(rbox(3.4, 0.5, 2.6, 0.25), mat(0xc9bba4), 0, 1.85, 0); dol.add(slab);
+  [[-0.9, -0.5], [-0.3, 0.2], [0.4, -0.3], [1.0, 0.5], [0.1, 0.8]].forEach(([x, z]) => dol.add(mesh(ball(0.09), glow(0xffd166), x, 2.12, z)));
+  const mam = makeMammoth(); scene.add(mam); mam.scale.setScalar(0.85);
+  anim.push(t => { const a = t * 0.12; mam.position.set(31 + Math.sin(a) * 4, 0, z0 - 6 + Math.cos(a * 0.7) * 3); mam.rotation.y = Math.atan2(Math.cos(a) * 4 * 0.12, -Math.sin(a * 0.7) * 3 * 0.084); mam.userData.legs.forEach((l, i) => { l.rotation.x = Math.sin(t * 4 + i * 1.6) * 0.25; }); });
+  [[-30, z0 + 2], [30, z0 - 22], [-20, z0 + 30], [20, z0 + 30]].forEach(([x, z], i) => { const f = eraPart('st_fire'); f.position.set(x, 0, z); scene.add(f); });
+  // 철기: a big 첨성대, round huts, a rice paddy
+  const z1 = ERA_Z[1];
+  const ch = eraPart('ir_tower'); ch.position.set(30, 0, z1 + 8); ch.scale.setScalar(3.4); scene.add(ch);
+  [[-34, z1 - 6], [34, z1 - 8], [-30, z1 + 12]].forEach(([x, z]) => { const h = new THREE.Group(); h.position.set(x, 0, z); h.add(mesh(cyl(1.5, 1.6, 1.2, 16), mat(0xf3e6c8), 0, 0.6, 0)); h.add(mesh(geo('thatchS', () => new THREE.ConeGeometry(2.1, 1.8, 16)), mat(0xe8c66a), 0, 2.0, 0)); h.add(mesh(rbox(0.7, 0.9, 0.1, 0.2), mat(WOOD), 0, 0.45, 1.55)); scene.add(h); });
+  const pad = mesh(new THREE.PlaneGeometry(9, 6, 9, 6), mat(0xa8dcef), 22, 0.03, z1 + 26); pad.rotation.x = -Math.PI / 2; scene.add(pad);
+  for (let i = 0; i < 24; i++) scene.add(mesh(cyl(0.03, 0.05, 0.6, 4), mat(0x6fbf5a), 18.5 + (i % 6) * 1.4, 0.3, z1 + 23.8 + Math.floor(i / 6) * 1.4));
+  // 산업: a factory puffing smoke, an observatory, a big gear
+  const z2 = ERA_Z[2];
+  const fac = new THREE.Group(); fac.position.set(30, 0, z2 + 8); scene.add(fac);
+  fac.add(mesh(rbox(8, 4.6, 6, 0.3), mat(BRICK), 0, 2.3, 0)); [-1, 1].forEach(k => { fac.add(mesh(cyl(0.6, 0.75, 5, 14), mat(0xb5655a), k * 2.5, 6.5, -1.5)); });
+  for (let i = 0; i < 3; i++) fac.add(mesh(rbox(1.3, 1.2, 0.12, 0.08), mat(GLASS), -2.6 + i * 2.6, 2.6, 3.02));
+  const puffs = []; for (let i = 0; i < 8; i++) { const p = mesh(ball(0.7), mat(0xf4f0fa), 0, 0, 0); scene.add(p); puffs.push(p); }
+  anim.push(t => puffs.forEach((p, i) => { const k = ((t * 0.25 + i / 4) % 1), side = i % 2 ? 1 : -1; p.position.set(30 + side * 2.5 + k * 3, 9 + k * 7, z2 + 6.5 - k * 2); p.scale.setScalar(0.6 + k * 1.4); }));
+  const obs = new THREE.Group(); obs.position.set(-34, 0, z2 - 6); scene.add(obs);
+  obs.add(mesh(cyl(2.6, 2.8, 3, 20), mat(0xfff5e1), 0, 1.5, 0)); const dm = mesh(geo('roof', () => new THREE.SphereGeometry(1, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2)), mat(0xc9c5e8), 0, 3.0, 0); dm.scale.set(2.7, 2.4, 2.7); obs.add(dm);
+  const sc = mesh(cyl(0.35, 0.45, 3, 12), mat(BRASS), 0.6, 4.4, 0.6); sc.rotation.x = -0.7; sc.rotation.z = -0.3; obs.add(sc);
+  const gear = new THREE.Group(); gear.position.set(-10, 3.2, z2 - 23); scene.add(gear);
+  const gw = mesh(cyl(2.2, 2.2, 0.5, 24), mat(BRASS), 0, 0, 0); gw.rotation.x = Math.PI / 2; gear.add(gw); gear.add(mesh(cyl(0.6, 0.6, 0.6, 16), mat(0x8f6f8f), 0, 0, 0)); gear.children[1].rotation.x = Math.PI / 2;
+  for (let i = 0; i < 12; i++) { const a = i / 12 * 6.28; gear.add(mesh(rbox(0.7, 0.7, 0.5, 0.1), mat(BRASS), Math.cos(a) * 2.5, Math.sin(a) * 2.5, 0)); }
+  scene.add(mesh(rbox(0.8, 1.2, 0.8, 0.1), mat(0x5d5a70), -10, 0.6, z2 - 23));
+  anim.push(t => { gear.rotation.z = t * 0.4; });
+  return anim;
+}
+
 // ---- The whole world ---------------------------------------------------------------------
 const W3 = {};
 function initWorld(canvas, cheap) {
@@ -335,10 +498,12 @@ function initWorld(canvas, cheap) {
   const sun = new THREE.DirectionalLight(0xfff0dc, 1.5); sun.position.set(6, 12, 9); scene.add(sun);
 
   // Ground: mint grass, a cream plaza, soft paths
-  const gr = mesh(new THREE.PlaneGeometry(190, 190, 120, 120), mat(0x9fe6c3)); gr.rotation.x = -Math.PI / 2; scene.add(gr);
+  const gr = mesh(new THREE.PlaneGeometry(260, 340, 130, 170), mat(0x9fe6c3), 0, 0, 110); gr.rotation.x = -Math.PI / 2; scene.add(gr);
+  ERA_Z.forEach((zc, e) => { const p = mesh(new THREE.PlaneGeometry(96, GATE_Z[0] - GATE_Z[1], 48, 32), mat(ERAS[e].ground), 0, 0.02, zc - 1.5); p.rotation.x = -Math.PI / 2; scene.add(p); }); // each era its own ground colour, even on the zoomed-out map
   const plaza = mesh(new THREE.RingGeometry(0.01, 8.5, 48, 12), mat(0xfff1d6), 0, 0.05, 0); plaza.rotation.x = -Math.PI / 2; scene.add(plaza);
   const path = (x, z, w, d) => { const p = mesh(new THREE.PlaneGeometry(w, d, Math.ceil(w), Math.ceil(d)), mat(0xf8e6c0), x, 0.035, z); p.rotation.x = -Math.PI / 2; scene.add(p); };
-  path(0, -17, 3.4, 20); path(0, 20, 3.4, 26); path(-12, -1, 18, 3); path(12, -1, 18, 3); path(-19.5, 6, 3, 34); path(19.5, 6, 3, 34);
+  path(0, -17, 3.4, 20); path(0, 20, 3.4, 26); path(-12, -1, 18, 3); path(12, -1, 18, 3); path(-19.5, 6, 3, 34); path(19.5, 6, 3, 34); path(0, 30, 3.4, 66);
+  ERA_Z.forEach(zc => { path(0, zc, 3.4, 66); path(-9, zc - 18, 26, 3); path(9, zc - 18, 26, 3); path(-9, zc + 4, 26, 3); });
   // Star grass: the signature. Small stars that twinkle in the lawn.
   W3.twinkles = [];
   let s = 7; const rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
@@ -348,10 +513,13 @@ function initWorld(canvas, cheap) {
     const st = mesh(starGeo(0.2, 0.04), glow([0xffe680, 0xfff3b0, 0xffc2e2][i % 3]), x, 0.32, z); st.userData.k = rnd() * 6; scene.add(st); W3.twinkles.push(st);
     scene.add(mesh(cyl(0.02, 0.02, 0.3, 5), mat(0x74c79e), x, 0.15, z));
   }
-  [[-9, -6], [10, 4], [-30, -14], [30, -14], [-30, 27], [30, 27], [-9, 37], [9, 38], [-17, -27], [18, -28], [-37, 6], [37, 6], [-8, -25], [8, -24], [-15, 6], [15, -5]].forEach(([x, z], i) => scene.add(makeTree(x, z, i)));
+  [[-9, -6], [10, 4], [-30, -14], [30, -14], [-30, 27], [30, 27], [-22, 50], [22, 50], [-38, 58], [38, 58], [-17, -27], [18, -28], [-37, 6], [37, 6], [-8, -25], [8, -24], [-15, 6], [15, -5]].forEach(([x, z], i) => scene.add(makeTree(x, z, i)));
   HIDE_SPOTS.forEach(h => scene.add(makeBush(h.x + 0.9, h.z - 0.6)));
   [[-6, -6], [6, 6], [-6, 6], [6.5, -5]].forEach(([x, z]) => { scene.add(mesh(cyl(0.07, 0.1, 2.6, 8), mat(0xffffff), x, 1.3, z)); scene.add(mesh(ball(0.3), glow(0xfff0a8), x, 2.75, z)); });
-  SHOPS.forEach(sh => scene.add(makeShop(sh)));
+  SHOPS.forEach(sh => scene.add(sh.era === 3 ? makeShop(sh) : makeEraShop(sh)));
+  ERA_Z.forEach((zc, e) => [[-40, -12], [40, -6], [-40, 14], [40, 16], [-20, 30], [20, 30], [-30, -30], [30, -30]].forEach(([x, dz], i) => scene.add(makeTree(x, zc + dz, i + e))));
+  const gates = ERA_Z.map((zc, e) => { const g = makeGate(e); scene.add(g); return g; });
+  const anim = makeEraDecor(scene);
   scene.add(makeHQ()); scene.add(makeDesk()); scene.add(makeGacha()); scene.add(makeLaunch());
 
   // Sky, fixed to the camera: stars, a ringed planet drifting by, a small moon
@@ -364,7 +532,8 @@ function initWorld(canvas, cheap) {
   const band = new THREE.Mesh(new THREE.SphereGeometry(13.1, 24, 6, 0, Math.PI * 2, 1.2, 0.35), new THREE.MeshLambertMaterial({ color: 0xff9e8a, fog: false })); planet.add(band);
   const pr = new THREE.Mesh(new THREE.TorusGeometry(21, 2.2, 3, 48), new THREE.MeshLambertMaterial({ color: 0xd9c8ff, fog: false })); pr.rotation.x = 1.25; pr.rotation.y = 0.3; pr.scale.z = 0.2; planet.add(pr);
   const moon = new THREE.Mesh(new THREE.SphereGeometry(6, 18, 12), new THREE.MeshLambertMaterial({ color: 0xfff3c4, fog: false })); moon.position.set(-135, 92, -300); sky.add(moon);
-  Object.assign(W3, { r, scene, cam, planet, focus: new THREE.Vector3(0, 0, 0) });
+  const zoned = scene.children.filter(o => o.isGroup); // buildings and props, hidden when their era is far away
+  Object.assign(W3, { r, scene, cam, planet, gates, anim, zoned, focus: new THREE.Vector3(0, 0, 0) });
   resizeWorld(); addEventListener('resize', resizeWorld);
 }
 function resizeWorld() {

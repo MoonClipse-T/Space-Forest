@@ -1,0 +1,220 @@
+<!doctype html>
+<!-- PROTOTYPE - NOT FOR PRODUCTION -->
+<!-- Question: 계획서, 재료 구하기, 제작, 발사 사이에 서로 장난치는 것이 한 차시 동안 재미있는가? -->
+<!-- Date: 2026-11-11 -->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>우주의 숲</title>
+<style>
+  :root { --cream: #fff8e8; --ink: #4a3d6b; --coral: #ff8a73; --mint: #7fdab0; --sun: #ffd166; --lav: #cdb4ff; }
+  html, body { margin: 0; height: 100%; background: #2e2559; overflow: hidden; touch-action: none; }
+  body { font-variant-numeric: tabular-nums; font-family: "Arial Rounded MT Bold", "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; font-weight: 700; color: var(--ink); -webkit-user-select: none; user-select: none; }
+  canvas#game { display: block; position: fixed; inset: 0; }
+  .hide { display: none !important; }
+  #ui { position: fixed; inset: 0; pointer-events: none; }
+  #ui > * { pointer-events: auto; }
+  .pill { background: var(--cream); border-radius: 999px; box-shadow: 0 4px 0 rgba(74, 61, 107, .25); }
+  #quest { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); padding: 9px 22px; font-size: 18px; max-width: 44vw; text-align: center; pointer-events: none; border-radius: 26px; }
+  #parts { position: absolute; top: 12px; left: 12px; padding: 8px 12px; border-radius: 22px; background: var(--cream); box-shadow: 0 4px 0 rgba(74, 61, 107, .25); display: grid; grid-template-columns: repeat(5, 34px); gap: 4px; pointer-events: none; }
+  #parts canvas, #bag canvas { width: 34px; height: 34px; border-radius: 10px; background: #efe6d2; }
+  #parts canvas.on { background: #c9f2dc; } #parts canvas.off { opacity: .45; }
+  #top { position: absolute; top: 12px; right: 12px; display: flex; gap: 8px; align-items: center; }
+  #rank { padding: 9px 16px; font-size: 17px; }
+  button { font: inherit; color: var(--ink); border: 0; cursor: pointer; }
+  .btn { background: var(--cream); border-radius: 999px; padding: 9px 15px; font-size: 16px; box-shadow: 0 4px 0 rgba(74, 61, 107, .25); }
+  .btn:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(74, 61, 107, .25); }
+  #bag { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); padding: 8px 14px; border-radius: 24px; background: var(--cream); box-shadow: 0 4px 0 rgba(74, 61, 107, .25); display: flex; gap: 6px; align-items: center; font-size: 16px; pointer-events: none; }
+  #bag .slot { width: 34px; height: 34px; border-radius: 10px; background: #efe6d2; }
+  #act { position: absolute; right: 26px; bottom: 26px; width: 132px; height: 132px; border-radius: 50%; background: var(--sun); font-size: 20px; line-height: 1.15; box-shadow: 0 7px 0 #d9a93a; padding: 8px; }
+  #act:active { transform: translateY(5px); box-shadow: 0 2px 0 #d9a93a; }
+  #act.dim { background: #e9e2cf; box-shadow: 0 7px 0 #c9c0a8; color: #9a90ad; }
+  #stick { position: absolute; left: 0; bottom: 0; width: 42vw; height: 60vh; }
+  #stickBase { position: absolute; width: 130px; height: 130px; border-radius: 50%; background: rgba(255, 248, 232, .35); border: 3px solid rgba(255, 248, 232, .7); left: 34px; bottom: 30px; }
+  #stickKnob { position: absolute; width: 60px; height: 60px; border-radius: 50%; background: var(--cream); left: 32px; top: 32px; box-shadow: 0 3px 0 rgba(74, 61, 107, .25); }
+  #tags { position: absolute; inset: 0; pointer-events: none !important; overflow: hidden; }
+  .tag { position: absolute; left: 0; top: 0; transform: translate(-999px, 0); white-space: nowrap; font-size: 15px; padding: 2px 9px; border-radius: 999px; background: rgba(255, 248, 232, .88); will-change: transform; }
+  .tag.me { background: var(--sun); } .tag.npc { background: rgba(74, 61, 107, .8); color: #fff8e8; }
+  #prompt { position: absolute; left: 0; top: 0; padding: 6px 14px; font-size: 17px; background: var(--ink); color: #fff8e8; border-radius: 16px; transform: translate(-999px, 0); pointer-events: none !important; white-space: nowrap; }
+  #toasts { position: absolute; top: 64px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; align-items: center; pointer-events: none !important; }
+  .toast { background: var(--ink); color: #fff8e8; padding: 8px 18px; border-radius: 999px; font-size: 17px; }
+  .toast.bad { background: #e35d6a; } .toast.good { background: #2f9e77; }
+  #ring { position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%); width: 230px; padding: 12px 16px; border-radius: 20px; background: var(--cream); text-align: center; font-size: 17px; pointer-events: none; }
+  #ring i { display: block; height: 14px; border-radius: 7px; background: #efe6d2; margin-top: 8px; overflow: hidden; }
+  #ring b { display: block; height: 100%; width: 0; background: var(--mint); }
+  /* Talk bubble */
+  #modal { position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: center; background: rgba(46, 37, 89, .12); }
+  #modal.mid { align-items: center; background: rgba(46, 37, 89, .45); }
+  .bubble { position: relative; width: min(820px, 92vw); margin-bottom: 4vh; background: var(--cream); border-radius: 44px; padding: 34px 38px 26px; font-size: 23px; line-height: 1.5; box-shadow: 0 8px 0 rgba(74, 61, 107, .25); box-sizing: border-box; max-height: 92vh; overflow: auto; touch-action: pan-y; }
+  #modal.mid .bubble { margin-bottom: 0; }
+  .who { position: absolute; top: -18px; left: 40px; background: var(--coral); color: #fff; padding: 5px 20px; border-radius: 999px; font-size: 19px; transform: rotate(-3deg); }
+  .more { position: absolute; right: 30px; bottom: 12px; font-size: 15px; color: #a497c4; }
+  .opts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+  .opt { background: #fff; border-radius: 18px; padding: 11px 18px; font-size: 20px; box-shadow: 0 4px 0 rgba(74, 61, 107, .2); text-align: left; }
+  .opt:active { transform: translateY(3px); } .opt[disabled] { opacity: .45; }
+  .opt small { display: block; font-size: 14px; color: #8a7fa8; }
+  .opt kbd { font: inherit; background: var(--lav); border-radius: 8px; padding: 0 7px; margin-right: 8px; font-size: 16px; }
+  .form label { display: block; font-size: 17px; margin: 8px 0 3px; }
+  .form textarea, .form input, #title input { width: 100%; box-sizing: border-box; font: inherit; font-size: 19px; color: var(--ink); border: 3px solid #e6dcc4; border-radius: 16px; padding: 9px 13px; background: #fff; resize: none; -webkit-user-select: text; user-select: text; }
+  .form textarea { height: 60px; } .form .bad { border-color: #e35d6a; }
+  .note { background: #ffe3e0; border-radius: 16px; padding: 9px 14px; font-size: 18px; margin-top: 8px; }
+  .cardpic { float: right; width: 170px; height: 120px; border-radius: 18px; margin: 0 0 8px 16px; }
+  #dial { display: block; margin: 8px auto; }
+  /* Whole screens */
+  .screen { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: rgba(46, 37, 89, .5); text-align: center; overflow: auto; }
+  #title h1 { font-size: 84px; margin: 0; color: #fff8e8; text-shadow: 0 6px 0 var(--ink); letter-spacing: 4px; }
+  #title p { margin: 0; font-size: 20px; color: #fff8e8; }
+  .panel { background: var(--cream); border-radius: 34px; padding: 20px 26px; box-shadow: 0 8px 0 rgba(74, 61, 107, .3); font-size: 19px; width: min(560px, 90vw); box-sizing: border-box; }
+  #swatches { display: flex; gap: 8px; justify-content: center; margin: 12px 0 4px; flex-wrap: wrap; }
+  #swatches button { width: 38px; height: 38px; border-radius: 50%; border: 4px solid transparent; }
+  #swatches button.on { border-color: var(--ink); }
+  .big { background: var(--sun); border-radius: 999px; padding: 13px 34px; font-size: 24px; box-shadow: 0 6px 0 #d9a93a; }
+  .big:active { transform: translateY(4px); box-shadow: 0 2px 0 #d9a93a; }
+  .keys { font-size: 16px; color: #7d7199; margin-top: 10px; line-height: 1.6; }
+  #results .panel { width: min(760px, 94vw); text-align: left; }
+  #results canvas { width: 100%; border-radius: 22px; display: block; }
+  #fame { columns: 2; padding-left: 24px; margin: 8px 0; font-size: 17px; }
+  /* Teacher page */
+  #teacher { position: fixed; inset: 0; background: #f6efff; overflow: auto; padding: 24px; -webkit-user-select: text; user-select: text; touch-action: auto; }
+  #teacher h1 { margin: 0 0 6px; font-size: 30px; } #teacher .plan { background: #fff; border-radius: 22px; padding: 16px 20px; margin: 14px 0; box-shadow: 0 4px 0 rgba(74, 61, 107, .15); font-size: 17px; }
+  #teacher .plan h2 { margin: 0 0 8px; font-size: 21px; } #teacher dt { color: #8a7fa8; font-size: 15px; margin-top: 8px; } #teacher dd { margin: 2px 0 0; font-weight: 400; white-space: pre-wrap; }
+  #teacher .row { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; } #teacher input { flex: 1; min-width: 200px; font: inherit; font-size: 16px; padding: 8px 12px; border-radius: 12px; border: 2px solid #d9cdf2; }
+  .stamp { display: inline-block; padding: 2px 12px; border-radius: 999px; font-size: 15px; color: #fff; background: #9a90ad; } .stamp.ok { background: #2f9e77; } .stamp.back { background: #e35d6a; } .stamp.sent { background: #e0a100; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="ui">
+  <div id="tags"></div>
+  <div id="prompt"></div>
+  <div id="stick"><div id="stickBase"><div id="stickKnob"></div></div></div>
+  <div id="parts"></div>
+  <div id="quest" class="pill"></div>
+  <div id="top"><div id="rank" class="pill"></div><button class="btn" id="bPause">쉬기</button><button class="btn" id="bMute">소리 켬</button></div>
+  <div id="toasts"></div>
+  <div id="ring" class="hide"><span></span><i><b></b></i></div>
+  <div id="bag"></div>
+  <button id="act">행동</button>
+  <div id="modal" class="hide"></div>
+  <div id="title" class="screen hide">
+    <h1>우주의 숲</h1>
+    <p>반 친구들과 함께하는 우주 탐사 연구소 마을</p>
+    <div class="panel">
+      <input id="nameIn" maxlength="8" placeholder="내 이름 (8자까지)" autocomplete="off">
+      <div id="swatches"></div>
+      <div class="keys">왼쪽 조이스틱 또는 방향키·WASD: 걷기<br>노란 버튼 또는 스페이스: 말 걸기·줍기·만들기·장난<br>P: 쉬기 · M: 소리</div>
+    </div>
+    <button class="big" id="bStart">연구소로 들어가기 (Enter)</button>
+    <p style="font-size:16px">이 판의 친구들은 이름에 "봇"이 붙은 컴퓨터 친구예요. 선생님 화면은 주소 끝에 ?teacher=1</p>
+  </div>
+  <div id="pause" class="screen hide"><div class="panel" style="text-align:center;font-size:30px">잠깐 쉬는 중<div class="keys">P 또는 아래 버튼으로 돌아가기</div></div><button class="big" id="bResume">계속하기</button></div>
+  <div id="results" class="screen hide"></div>
+</div>
+<script src="vendor/three.js"></script>
+<script src="config.js"></script>
+<script src="data.js"></script>
+<script src="world.js"></script>
+<script>
+'use strict';
+// ---- Built to be checked ----------------------------------------------------------------
+const params = new URLSearchParams(location.search);
+const tune = new Proxy({}, { get: (_, k) => CONFIG[k].value }); // live: tune.speed is CONFIG.speed.value
+const STEP = 1 / 60;            // simulation step in seconds; motion is per second, never per frame
+const TITLE = '우주의 숲';
+const clock = window.GAME_CLOCK || { now: () => performance.now() / 1000 }; // a check may inject one
+const CHEAP = params.get('render') === 'cheap'; // a headless shot or check: 3D draws cheap; players never see it
+const TEACHER = params.get('teacher') === '1';
+let seed;
+function rng() { // mulberry32; every gameplay random call reads this, never Math.random
+  seed = (seed + 0x6D2B79F5) | 0;
+  let t = Math.imul(seed ^ (seed >>> 15), seed | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+const events = []; // window.game.events: anything the game wants a run to see
+const $ = id => document.getElementById(id);
+
+// ---- Input: keys by position (event.code), OS key repeat ignored ------------------------
+const down = new Set(), hit = new Set();
+const pressed = code => hit.has(code); // true for one step after the key goes down
+const typing = e => /INPUT|TEXTAREA/.test(e.target.tagName);
+addEventListener('keydown', e => {
+  startAudio();
+  if (typing(e)) { if (e.code === 'Enter' && e.target.id === 'nameIn') hit.add('Enter'); return; }
+  if (!e.repeat) { down.add(e.code); hit.add(e.code); }
+  if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
+});
+addEventListener('keyup', e => down.delete(e.code));
+addEventListener('pointerdown', () => startAudio());
+addEventListener('blur', () => down.clear());
+addEventListener('contextmenu', e => e.preventDefault());
+
+// ---- Audio: started on first input, mute on M --------------------------------------------
+let audio = null, muted = false;
+function startAudio() {
+  if (!audio) {
+    const ac = window.GAME_AUDIO || new (window.AudioContext || window.webkitAudioContext)(); // a check may inject one
+    const out = ac.createGain(); out.gain.value = muted ? 0 : tune.volume;
+    out.connect(ac.destination); audio = { ac, out };
+  }
+  if (audio.ac.state === 'suspended') audio.ac.resume();
+}
+function setMuted(m) { muted = m; if (audio) audio.out.gain.value = m ? 0 : tune.volume; $('bMute').textContent = m ? '소리 끔' : '소리 켬'; }
+addEventListener('tune', () => setMuted(muted)); // the tweak panel (an add-on), when added, moved a value: the volume follows
+function tone(freq, dur, type = 'sine', vol = 0.25, when = 0) {
+  if (!audio || muted) return;
+  const t = audio.ac.currentTime + when, o = audio.ac.createOscillator(), g = audio.ac.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g).connect(audio.out); o.start(t); o.stop(t + dur);
+}
+let scene, state;
+</script>
+<script src="game.js"></script>
+<script>
+'use strict';
+// ---- Loop: fixed step, frame time clamped ---------------------------------------------
+function step() {
+  if (pressed('KeyM')) { setMuted(!muted); hit.delete('KeyM'); }
+  scenes[scene].update(STEP); hit.clear();
+}
+let last, acc = 0, ALPHA = 1; // ALPHA: how far the frame is between the last two steps
+function tick() {
+  const now = clock.now();
+  acc += Math.min(now - last, 0.25); last = now; // a stall never fast-forwards the game
+  while (acc >= STEP) { step(); acc -= STEP; }
+  ALPHA = acc / STEP; // draw between steps, so the view never judders
+  drawFrame();
+}
+function drawFrame() { scenes[scene].draw(); }
+function frame() { tick(); requestAnimationFrame(frame); }
+// A headless browser on a time budget runs timers but almost no animation frames: a timer
+// ticks when no frame has come for 100 ms on a visible page; a hidden tab stays paused.
+function timer() { if (document.visibilityState === 'visible' && clock.now() - last > 0.1) tick(); }
+
+// ---- What a check can read and drive (?manual=1 stops the loop; players never see it) ----
+window.game = {
+  get scene() { return scene; },
+  get state() { return state; },
+  press(code) { hit.add(code); },
+  hold(code, on) { on ? down.add(code) : down.delete(code); },
+  get events() { return events; }, // the loop steps; a check empties it
+  step(n = 1, draw = true, alpha = 1) {
+    for (let i = 0; i < n; i++) step();
+    if (draw) { ALPHA = alpha; drawFrame(); }
+  },
+};
+
+if (TEACHER) teacherPage();
+else {
+  initWorld($('game'), CHEAP);
+  reset();
+  setScene(params.get('scene') || 'title');
+  last = clock.now();
+  if (params.get('manual') === '1') drawFrame();
+  else { requestAnimationFrame(frame); setInterval(timer, 50); }
+}
+</script>
+</body>
+</html>

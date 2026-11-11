@@ -6,7 +6,7 @@
 const PART = Object.fromEntries(PARTS.map(p => [p.id, p]));
 const SHOP = Object.fromEntries(SHOPS.map(s => [s.id, s]));
 const GUIDE = '도장 로봇';
-let dyn = null, marker = null, COL = [], keepers = [], lineup = null, myShirt = 1;
+let dyn = null, marker = null, COL = [], keepers = [], places = [], lineup = null, myShirt = 1, zoom = 1, zoomNow = 1;
 const me = () => state.actors[0];
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
@@ -50,12 +50,16 @@ function reset() {
   if (dyn) W3.scene.remove(dyn);
   dyn = new THREE.Group(); W3.scene.add(dyn); $('tags').innerHTML = ''; lineup = null;
   closeUI(true); savePlans({});
-  state = { t: 0, score: 0, gained: '', actors: [], hidden: [], foot: [], fx: [], toasts: [], bag: [], ui: null, act: null, fame: [], plan: {}, planNote: '', sulk: {}, staged: false, near: null, launching: null, joy: { x: 0, z: 0 }, hud: '', questText: '' };
+  state = { t: 0, score: 0, gained: '', actors: [], hidden: [], chests: [], foot: [], fx: [], toasts: [], bag: [], ui: null, act: null, fame: [], plan: {}, planNote: '', sulk: {}, staged: false, near: null, launching: null, joy: { x: 0, z: 0 }, hud: '', questText: '' };
   COL = [{ x: PLACES.hq.x, z: PLACES.hq.z, r: 4.7 }, { x: PLACES.gacha.x, z: PLACES.gacha.z, r: 1.2 }, { x: PLACES.desk.x, z: PLACES.desk.z, r: 1.4 }, { x: PLACES.desk.x + 2.6, z: PLACES.desk.z + 0.2, r: 0.7 }];
   SHOPS.forEach(s => { COL.push({ x: s.x, z: s.z, r: 3.7 }); const k = keeperSpot(s); COL.push({ x: k.x, z: k.z, r: 0.75 }); });
   keepers = SHOPS.map(s => { const k = keeperSpot(s), m = makeKeeper(s.id); m.position.set(k.x, 0, k.z); m.rotation.y = s.x < 0 ? 0.5 : -0.5; dyn.add(m); return { id: s.id, name: s.keeper, x: k.x, z: k.z, y: 3.1, mesh: m, tag: tag(s.keeper, 'npc') }; });
   const g = makeKeeper('guide'); g.position.set(PLACES.desk.x + 2.6, 0, PLACES.desk.z + 0.2); dyn.add(g);
   keepers.push({ id: 'guide', name: GUIDE, x: g.position.x, z: g.position.z, y: 2.8, mesh: g, tag: tag(GUIDE, 'npc') });
+  places = SHOPS.map(s => ({ x: s.x, y: 4.6, z: s.z + 2.8, tag: tag(s.name, 'place') }));
+  places.push({ x: PLACES.hq.x, y: 4.2, z: PLACES.hq.z + 4.5, tag: tag('탐사 본부', 'place') }, { x: PLACES.gacha.x, y: 4.1, z: PLACES.gacha.z, tag: tag('임무 뽑기', 'place') }, { x: PLACES.desk.x - 1.2, y: 2.5, z: PLACES.desk.z, tag: tag('계획서 책상', 'place') },
+    { x: PLACES.launch.x, y: 3.3, z: PLACES.launch.z, tag: tag('발사대', 'place') }, { x: PAD_SPOTS[0].x - 1.9, y: 1.9, z: PAD_SPOTS[0].z + 2.3, tag: tag('내 작업장', 'place'), mine: true });
+  HIDE_SPOTS.slice(0, tune.chest_count).forEach(h => { const g2 = makeChest(h.x, h.z); dyn.add(g2); state.chests.push({ x: h.x, z: h.z, g: g2, items: 0 }); COL.push({ x: h.x, z: h.z, r: 0.8 }); });
   const n = 1 + Math.min(tune.bot_count, BOT_NAMES.length, PAD_SPOTS.length - 1);
   const myName = ($('nameIn').value.trim() || '나').slice(0, 8);
   for (let i = 0; i < n; i++) {
@@ -73,7 +77,7 @@ function reset() {
   marker = mesh(starGeo(0.42, 0.14), glow(0xffe14d)); dyn.add(marker);
   lookAtSpot(PLACES.spawn.x, PLACES.spawn.z, tune.cam_height, tune.cam_back, true);
 }
-function tag(textStr, cls) { const d = document.createElement('div'); d.className = 'tag ' + cls; d.textContent = textStr; $('tags').appendChild(d); return d; }
+function tag(textStr, cls) { const d = document.createElement('div'); d.className = 'tag ' + cls; d.textContent = textStr; $('tags').appendChild(d); d._w = d.offsetWidth || textStr.length * 16 + 20; return d; }
 function refreshActor(a) {
   const u = a.rocket.userData;
   ['hull', 'engine', 'antenna', 'nav', 'oven', 'food', 'scan'].forEach(k => { u.parts[k].visible = !!a.parts[k]; });
@@ -126,14 +130,19 @@ function prank(by, v, kind) {
   refreshActor(v); events.push('prank:' + kind);
   if (v === me()) { toast(`내 작업장: ${what} ${by.shirtName}색 발자국이 남았어`, 'bad'); sfx('alarm'); }
 }
-function stash(by, x, z) {
+function stash(by, x, z, chest) { // on the ground where it sparkles, or out of sight in a treasure chest
   const c = by.carry; by.carry = null; refreshActor(by);
-  const g = new THREE.Group(); g.position.set(x, 0, z); const p = partMesh(c.part); p.position.y = 0.4; g.add(p);
-  const st = mesh(starGeo(0.22, 0.06), glow(0xfff3a0), 0, 1.5, 0); g.add(st); dyn.add(g);
-  state.hidden.push({ owner: c.owner, part: c.part, x, z, g, st });
-  if (c.owner === 0) toast(`내 ${josa(PART[c.part].name, '이', '가')} 어딘가에 숨겨졌어. 반짝이는 곳을 찾자!`, 'bad');
+  if (chest) { chest.items++; state.hidden.push({ owner: c.owner, part: c.part, x: chest.x, z: chest.z, chest }); showChest(chest); }
+  else {
+    const g = new THREE.Group(); g.position.set(x, 0, z); const p = partMesh(c.part); p.position.y = 0.4; g.add(p);
+    const st = mesh(starGeo(0.22, 0.06), glow(0xfff3a0), 0, 1.5, 0); g.add(st); dyn.add(g);
+    state.hidden.push({ owner: c.owner, part: c.part, x, z, g, st });
+  }
+  if (c.owner === 0) toast(chest ? `내 ${josa(PART[c.part].name, '이', '가')} 보물상자 어딘가에 숨겨졌어. 뚜껑이 들썩이는 상자를 찾자!` : `내 ${josa(PART[c.part].name, '이', '가')} 어딘가에 숨겨졌어. 반짝이는 곳을 찾자!`, 'bad');
 }
-function unhide(h) { dyn.remove(h.g); state.hidden.splice(state.hidden.indexOf(h), 1); }
+function showChest(c) { c.g.userData.lid.rotation.x = c.items ? -0.4 : 0; c.g.userData.spark.visible = c.items > 0; }
+function unhide(h) { if (h.g) dyn.remove(h.g); if (h.chest) { h.chest.items--; showChest(h.chest); } state.hidden.splice(state.hidden.indexOf(h), 1); }
+const beside = h => (h.chest ? { x: h.x, z: h.z + 1.5 } : h);
 
 // ---- Bot friends: the stand-in for classmates --------------------------------------------------
 const go = p => ({ go: p }), wait = t => ({ wait: t }), act = fn => ({ fn });
@@ -144,7 +153,7 @@ function botThink(a) {
     return;
   }
   const h = state.hidden.find(x => x.owner === a.i);
-  if (h) { T.push(go(h), act(() => { if (state.hidden.includes(h)) unhide(h); }), go(padStand(a)), wait(tune.build_time), act(() => install(a, h.part))); return; }
+  if (h) { T.push(go(beside(h)), act(() => { if (state.hidden.includes(h)) unhide(h); }), go(padStand(a)), wait(tune.build_time), act(() => install(a, h.part))); return; }
   if (a.loose || a.doodle) { T.push(go(padStand(a)), wait(tune.bot_fix_time), act(() => { a.loose = a.doodle = false; refreshActor(a); })); return; }
   if (state.t >= a.prankReady) {
     if (rng() < tune.bot_prank_chance) {
@@ -163,7 +172,7 @@ function planPrank(a, v, via) {
     const ks = ['hide', 'loose', 'doodle'].filter(k => !canPrank(a, v, k)); if (!ks.length) return;
     const k = via ? 'hide' : pick(ks); if (via && !ks.includes('hide')) return;
     prank(a, v, k);
-    if (k === 'hide') { const spot = pick(HIDE_SPOTS); if (via) a.tasks.push(go(via)); a.tasks.push(go(spot), act(() => { if (a.carry) stash(a, spot.x, spot.z); })); }
+    if (k === 'hide') { const i = Math.floor(rng() * HIDE_SPOTS.length), spot = HIDE_SPOTS[i], chest = state.chests[i]; if (via) a.tasks.push(go(via)); a.tasks.push(go({ x: spot.x, z: spot.z + 1.5 }), act(() => { if (a.carry) stash(a, a.x, a.z, chest); })); }
   }));
 }
 function botStep(a, dt) {
@@ -187,9 +196,10 @@ function liftOff(a) {
 function findNear() {
   const m = me(), R = tune.interact_range; let best = null;
   const offer = (d, o) => { if (d <= (o.range || R) && (!best || d < best.d)) best = Object.assign(o, { d }); };
-  if (m.carry) return { kind: 'stash', label: '여기 숨기기', x: m.x, z: m.z, y: 3.2 };
+  if (m.carry) { const c = state.chests.find(c2 => dist(m, c2) < R + 0.3); return c ? { kind: 'stash', label: '상자에 숨기기', x: c.x, z: c.z, y: 2.4, chest: c } : { kind: 'stash', label: '바닥에 숨기기', x: m.x, z: m.z, y: 3.2 }; }
+  state.chests.forEach(c => offer(dist(m, c), { kind: 'chest', label: '상자 열기', x: c.x, z: c.z, y: 2.4, ref: c, range: R + 0.3 }));
   state.actors.forEach(a => { if (a.bot && a.carry && a.carry.owner === 0) offer(dist(m, a), { kind: 'catch', label: '잡아라!', x: a.x, z: a.z, y: 3.4, ref: a, range: R + 0.4 }); });
-  state.hidden.forEach(h => { if (h.owner === 0) offer(dist(m, h), { kind: 'find', label: '되찾기', x: h.x, z: h.z, y: 2.2, ref: h }); });
+  state.hidden.forEach(h => { if (h.owner === 0 && !h.chest) offer(dist(m, h), { kind: 'find', label: '되찾기', x: h.x, z: h.z, y: 2.2, ref: h }); });
   offer(dist(m, PLACES.gacha), { kind: 'gacha', label: m.mission ? '임무 카드 보기' : '임무 뽑기', x: PLACES.gacha.x, z: PLACES.gacha.z, y: 3.6, range: R + 0.4 });
   offer(dist(m, PLACES.desk), { kind: 'desk', label: m.planStatus === 'ok' ? '내 계획서 보기' : '계획서 쓰기', x: PLACES.desk.x, z: PLACES.desk.z, y: 2.2, range: R + 0.4 });
   keepers.forEach(k => { if (k.id !== 'guide') offer(dist(m, k), { kind: 'keeper', label: '말 걸기', x: k.x, z: k.z, y: 3.7, ref: k }); });
@@ -206,7 +216,13 @@ function doAction(n) {
   if (n.kind === 'stash') {
     const v = state.actors[m.carry.owner];
     if (dist(m, v.pad) < tune.stash_min_dist) { toast('너무 가까워! 더 멀리 가서 숨기자'); sfx('bad'); return; }
-    stash(m, m.x + Math.sin(m.face) * 0.9, m.z + Math.cos(m.face) * 0.9); toast('쉿! 숨겼다', 'good'); sfx('pop');
+    stash(m, m.x + Math.sin(m.face) * 0.9, m.z + Math.cos(m.face) * 0.9, n.chest); toast(n.chest ? '쉿! 상자에 넣고 뚜껑을 닫았다' : '쉿! 바닥에 숨겼다', 'good'); sfx('pop');
+  }
+  if (n.kind === 'chest') {
+    const mine = state.hidden.filter(h => h.chest === n.ref && h.owner === 0);
+    if (mine.length) { mine.forEach(h => { unhide(h); state.bag.push(h.part); }); toast(`상자에서 ${josa(mine.map(h => PART[h.part].name).join(', '), '을', '를')} 찾았다! 작업장에 다시 달자`, 'good'); sfx('ok'); state.hud = ''; }
+    else if (n.ref.items) say('보물상자', ['친구 물건이 들어 있다. 내 것은 아니니 살짝 닫아 두자.']);
+    else { toast('텅 빈 보물상자다. 물건을 숨기기 딱 좋겠는걸'); sfx('blip'); }
   }
   if (n.kind === 'catch') { const a = n.ref, id = a.carry.part; a.carry = null; a.tasks.length = 0; refreshActor(a); state.bag.push(id); toast(`잡았다! ${josa(PART[id].name, '을', '를')} 되찾았어`, 'good'); sfx('ok'); }
   if (n.kind === 'find') { unhide(n.ref); state.bag.push(n.ref.part); toast(`${PART[n.ref.part].name} 찾았다! 작업장에 다시 달자`, 'good'); sfx('pop'); state.hud = ''; }
@@ -258,8 +274,10 @@ function keeperTalk(k) {
   const m = me(), s = SHOP[k.id], mine = PARTS.filter(p => p.shop === k.id);
   if (m.planStatus !== 'ok') return say(k.name, [`${s.name}에 어서 와!`, `${mine.map(p => p.item).join(', ')}… 다 있지. 하지만 계획서에 도장을 받아야 줄 수 있어.`]);
   if (state.t < (state.sulk[k.id] || 0)) return say(k.name, [`잠깐만, ${Math.ceil(state.sulk[k.id] - state.t)}초만 있다가 다시 물어봐 줄게.`]);
-  const p = mine.find(q => !m.parts[q.id] && !m.away[q.id] && !state.bag.includes(q.id));
-  if (!p) return say(k.name, [mine.some(q => m.away[q.id]) ? '어머, 물건을 잃어버렸다고? 반짝이는 곳을 찾아봐. 새로 줄 순 없어!' : '우리 가게 건 다 챙겼네! 멋진 탐사가 되길.']);
+  const p = PARTS.find(q => !m.parts[q.id] && !m.away[q.id] && !state.bag.includes(q.id)); // the one next thing, in the set order
+  if (mine.some(q => m.away[q.id])) return say(k.name, ['어머, 물건을 잃어버렸다고? 반짝이는 곳이나 보물상자를 찾아봐. 새로 줄 순 없어!']);
+  if (!p) return say(k.name, ['필요한 건 다 챙겼네! 작업장에서 조립하고 발사대로 가 봐.']);
+  if (p.shop !== k.id) { sfx('bad'); return say(k.name, [`잠깐, 순서가 있어! 지금은 ${josa(p.name, '을', '를')} 만들 차례야.`, `${SHOP[p.shop].name}에 가서 ${josa(p.item, '을', '를')} 먼저 구해 와. 우리 가게는 그다음이야!`]); }
   if (state.bag.length >= tune.bag_size) return say(k.name, ['가방이 꽉 찼잖아! 작업장에 가서 조립하고 와.']);
   const order = p.a.map((t, i) => ({ t, ok: i === 0 })); for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
   ask(k.name, `${josa(p.item, '이', '가')} 필요하구나? 그럼 하나만 맞혀 봐.<br><b>${p.q}</b>`, order.map(o => ({ label: o.t, fn: () => {
@@ -342,7 +360,7 @@ function uiStep(dt) {
 function quest() {
   const m = me();
   if (state.launching) return { text: '발사!!' };
-  if (m.carry) return { text: '들고 튀어! 멀리 가서 행동 버튼으로 숨기자' };
+  if (m.carry) return { text: '들고 튀어! 멀리 가서 바닥이나 보물상자에 숨기자' };
   if (!m.mission) return Object.assign({ text: '광장의 뽑기 기계에서 임무 카드를 뽑자' }, PLACES.gacha);
   if (m.planStatus === 'none') return Object.assign({ text: '본부 책상에서 탐사 계획서를 쓰자' }, PLACES.desk);
   if (m.planStatus === 'back') return Object.assign({ text: '계획서가 돌아왔어! 책상에서 고쳐 쓰자' }, PLACES.desk);
@@ -350,10 +368,10 @@ function quest() {
   const th = state.actors.find(a => a.carry && a.carry.owner === 0);
   if (th) return { text: `${josa(th.name, '이', '가')} 내 ${josa(PART[th.carry.part].name, '을', '를')} 들고 튄다! 잡아라!`, x: th.x, z: th.z };
   const h = state.hidden.find(x => x.owner === 0);
-  if (h) return { text: `숨겨진 ${josa(PART[h.part].name, '을', '를')} 찾아오자! 반짝이는 곳`, x: h.x, z: h.z };
+  if (h) return h.chest ? { text: `내 ${josa(PART[h.part].name, '이', '가')} 보물상자에! 뚜껑이 들썩이는 상자를 찾자 (축소해서 둘러보기)` } : { text: `숨겨진 ${josa(PART[h.part].name, '을', '를')} 찾아오자! 반짝이는 곳`, x: h.x, z: h.z };
   if (m.loose) return Object.assign({ text: '내 작업장 나사가 풀렸어! 조이러 가자' }, m.pad);
   if (m.doodle) return Object.assign({ text: '내 우주선에 낙서가! 지우러 가자' }, m.pad);
-  const next = PARTS.find(p => !m.parts[p.id] && !state.bag.includes(p.id));
+  const next = PARTS.find(p => !m.parts[p.id] && !m.away[p.id] && !state.bag.includes(p.id));
   if (state.bag.length && (!next || state.bag.length >= tune.bag_size)) return Object.assign({ text: '내 작업장에서 조립하자' }, m.pad);
   if (next) { const s = SHOP[next.shop], k = keeperSpot(s); return { text: `${s.name}에서 ${next.item} 구하기` + (state.bag.length ? ' (또는 작업장에서 조립)' : ''), x: k.x, z: k.z }; }
   return Object.assign({ text: '준비 끝! 북쪽 발사대로 가자' }, PLACES.launch);
@@ -362,12 +380,17 @@ function quest() {
 // ---- Scenes ---------------------------------------------------------------------------------------
 function setScene(s) {
   scene = s; const play = s === 'play' || s === 'pause';
-  ['parts', 'quest', 'top', 'bag', 'act', 'stick', 'toasts'].forEach(id => $(id).classList.toggle('hide', !play));
+  ['parts', 'quest', 'top', 'bag', 'act', 'stick', 'toasts', 'zoomer'].forEach(id => $(id).classList.toggle('hide', !play));
   $('title').classList.toggle('hide', s !== 'title'); $('pause').classList.toggle('hide', s !== 'pause'); $('results').classList.toggle('hide', s !== 'results');
   if (s !== 'play') { $('ring').classList.add('hide'); $('prompt').style.transform = 'translate(-999px,0)'; }
   if (s === 'figures') buildLineup();
 }
 function start() { reset(); setScene('play'); sfx('ok'); }
+function setZoom(dir) { zoom = Math.max(tune.zoom_min, Math.min(tune.zoom_max, zoom * Math.pow(tune.zoom_step, dir))); if (Math.abs(zoom - 1) < 0.12) zoom = 1; }
+function view(x, z, up = 0, back = 0) { // the camera at the current zoom; far out, the ground flattens into a map
+  const Z = zoomNow; lookAtSpot(x, z, tune.cam_height * Z + up, tune.cam_back * Math.pow(Z, 0.8) + back);
+  BEND.uCurve.value = tune.curve / (Z * Z); W3.scene.fog.near = 48 * Z; W3.scene.fog.far = 110 * Z;
+}
 function playStep(dt) {
   const m = me(); state.t += dt;
   if (Math.floor(state.t * 2) !== Math.floor((state.t - dt) * 2)) pollPlan();
@@ -387,6 +410,7 @@ function playStep(dt) {
     walk(m, dx, dz, tune.walk_speed * Math.min(1, Math.hypot(dx, dz)), dt);
     state.near = findNear();
     if (state.near && (pressed('Space') || pressed('Enter') || pressed('KeyE'))) doAction(state.near);
+    if (pressed('Equal') || pressed('NumpadAdd')) setZoom(-1); if (pressed('Minus') || pressed('NumpadSubtract')) setZoom(1);
     if (pressed('KeyP') || pressed('Escape')) { setScene('pause'); return; }
   }
   if (state.ui || state.act || state.launching) { m.moving = false; state.near = null; }
@@ -400,19 +424,20 @@ function playStep(dt) {
     a.mesh.position.set(a.x, 0, a.z); a.mesh.rotation.y = a.face; animateKid(a.mesh, a.moving, dt, state.t);
     const u = a.rocket.userData; u.tilt.rotation.z = a.loose ? 0.2 + Math.sin(state.t * 5 + a.i) * 0.04 : 0;
   });
-  state.hidden.forEach(h => { h.st.rotation.y += dt * 3; h.st.position.y = 1.5 + Math.sin(state.t * 4) * 0.15; });
+  state.hidden.forEach(h => { if (h.st) { h.st.rotation.y += dt * 3; h.st.position.y = 1.5 + Math.sin(state.t * 4) * 0.15; } });
+  state.chests.forEach(c => { if (c.items) { const u = c.g.userData; u.lid.rotation.x = -0.3 - Math.abs(Math.sin(state.t * 5)) * 0.25; u.spark.rotation.y = state.t * 3; } });
+  zoomNow += (zoom - zoomNow) * 0.15;
   state.foot = state.foot.filter(f => { f.t -= dt; if (f.t <= 0) dyn.remove(f.m); return f.t > 0; });
   state.fx = state.fx.filter(f => { f.t += dt; f.r.position.y = 0.4 + f.t * f.t * 1.4; f.fl.scale.set(1, 0.8 + Math.sin(f.t * 50) * 0.3, 1); f.r.rotation.y += dt * 0.6; if (f.t > 8) dyn.remove(f.r); return f.t <= 8; });
   const before = state.toasts.length; state.toasts = state.toasts.filter(t => (t.t -= dt) > 0); if (state.toasts.length !== before) state.hud = '';
   W3.twinkles.forEach(s => { s.scale.setScalar(0.75 + Math.sin(state.t * 3 + s.userData.k) * 0.3); s.rotation.y = state.t + s.userData.k; });
   W3.planet.position.x = 150 - (state.t * 1.2) % 300; W3.planet.rotation.y = state.t * 0.05;
   const q = quest(); state.questText = q.text;
-  marker.visible = q.x !== undefined; if (marker.visible) { marker.position.set(q.x, 4.6 + Math.sin(state.t * 4) * 0.25, q.z); marker.rotation.y = state.t * 2.5; }
+  marker.visible = q.x !== undefined; if (marker.visible) { marker.position.set(q.x, 4.6 + zoomNow + Math.sin(state.t * 4) * 0.25, q.z); marker.rotation.y = state.t * 2.5; marker.scale.setScalar(1 + (zoomNow - 1) * 0.5); }
   if (state.launching) {
-    const L = state.launching; L.t += dt; lookAtSpot(PLACES.launch.x, PLACES.launch.z + 5, tune.cam_height + L.t * 0.8, tune.cam_back + 3);
+    const L = state.launching; L.t += dt; zoom = 1; view(PLACES.launch.x, PLACES.launch.z + 5, L.t * 0.8, 3);
     if (L.t > 5) finish();
-  } else lookAtSpot(m.x, m.z, tune.cam_height, tune.cam_back);
-  BEND.uCurve.value = tune.curve;
+  } else view(m.x, m.z);
 }
 function finish() {
   const m = me(), rank = state.fame.indexOf(m.name) + 1;
@@ -425,13 +450,26 @@ function finish() {
 }
 function drawWorld() {
   W3.r.render(W3.scene, W3.cam);
-  const place = (el, x, y, z) => { const p = toScreen(x, y, z); el.style.transform = p.on ? `translate(${Math.round(p.x)}px,${Math.round(p.y)}px) translate(-50%,-100%)` : 'translate(-999px,0)'; };
-  state.actors.forEach(a => { if (!a.launched) place(a.tag, a.x, 2.75, a.z); });
-  keepers.forEach(k => place(k.tag, k.x, k.y, k.z));
+  // Name tags: me first, then places, then whoever is near. A tag never covers the HUD or another tag.
+  const m = me(), play = scene === 'play' || scene === 'pause', list = [], taken = [], off = el => { el.style.transform = 'translate(-999px,0)'; };
+  if (play) ['parts', 'questbox', 'top', 'bag', 'act', 'zoomer', 'stickBase'].forEach(id => { const b = $(id).getBoundingClientRect(); if (b.width) taken.push([b.left - 6, b.top - 6, b.right + 6, b.bottom + 6]); });
+  const n = state.near, pr = $('prompt');
+  if (n && scene === 'play') { pr.textContent = n.label; const p = toScreen(n.x, n.y, n.z), w = pr.offsetWidth; pr.style.transform = `translate(${Math.round(p.x)}px,${Math.round(p.y)}px) translate(-50%,-100%)`; taken.push([p.x - w / 2 - 4, p.y - 40, p.x + w / 2 + 4, p.y + 2]); } else off(pr);
+  const put = (el, x, y, z, pri) => list.push({ el, x, y, z, pri }), close = zoomNow < 1.9;
+  if (!m.launched) put(m.tag, m.x, 2.75 * Math.max(1, zoomNow * 0.7), m.z, 0);
+  places.forEach(p => put(p.tag, p.x, p.y, p.z, p.mine ? 1 : 2));
+  keepers.forEach(k => { if (close && dist(m, k) < 13) put(k.tag, k.x, k.y, k.z, 3); else off(k.tag); });
+  state.actors.forEach(a => { if (!a.bot) return; const d = dist(m, a); if (!a.launched && close && d < 15) put(a.tag, a.x, 2.75, a.z, 4 + d); else off(a.tag); });
+  list.sort((a, b) => a.pri - b.pri).forEach(o => {
+    const p = toScreen(o.x, o.y, o.z), w = o.el._w, tries = o.pri <= 2 ? 3 : 1; if (!p.on) return off(o.el);
+    let y = p.y, r = null;
+    for (let i = 0; i < tries; i++, y -= 30) { const q = [p.x - w / 2, y - 28, p.x + w / 2, y]; if (!taken.some(t => q[0] < t[2] && t[0] < q[2] && q[1] < t[3] && t[1] < q[3])) { r = q; break; } }
+    if (!r) return off(o.el);
+    taken.push(r); o.el.style.transform = `translate(${Math.round(p.x)}px,${Math.round(r[3])}px) translate(-50%,-100%)`;
+  });
 }
 function drawHud() {
-  const m = me(), n = state.near, pr = $('prompt');
-  if (n && scene === 'play') { const p = toScreen(n.x, n.y, n.z); pr.textContent = n.label; pr.style.transform = `translate(${Math.round(p.x)}px,${Math.round(p.y)}px) translate(-50%,-100%)`; } else pr.style.transform = 'translate(-999px,0)';
+  const m = me(), n = state.near;
   const b = $('act'); b.textContent = n ? n.label : '행동'; b.classList.toggle('dim', !n);
   const a = state.act; $('ring').classList.toggle('hide', !a); if (a) { $('ring').firstElementChild.textContent = a.label; $('ring').querySelector('b').style.width = Math.round(a.t / a.dur * 100) + '%'; }
   const key = [state.questText, PARTS.map(p => m.parts[p.id] ? 1 : state.bag.includes(p.id) ? 2 : 0).join(''), state.bag.join(), state.fame.length, state.toasts.map(t => t.msg).join('|')].join('#');
@@ -446,7 +484,7 @@ function drawHud() {
 const scenes = {
   figures: { update(dt) { state.t += dt; }, draw() { W3.cam.position.set(0, 5, 326); W3.cam.lookAt(0, 1.7, 300); BEND.uCamZ.value = 250; W3.r.render(W3.scene, W3.cam); lineup.forEach((f, i) => { const p = toScreen(f.x, -0.25 - (i % 2) * 0.75, 300); f.tag.style.transform = `translate(${Math.round(p.x)}px,${Math.round(p.y)}px) translate(-50%,0)`; }); } },
   title: {
-    update(dt) { state.t += dt; W3.planet.position.x = 150 - (state.t * 1.2) % 300; state.actors.forEach(a => { a.mesh.position.set(a.x, 0, a.z); animateKid(a.mesh, false, dt, state.t); }); lookAtSpot(0, 3, tune.cam_height, tune.cam_back); if (pressed('Enter') || pressed('Space')) start(); },
+    update(dt) { state.t += dt; W3.planet.position.x = 150 - (state.t * 1.2) % 300; state.actors.forEach(a => { a.mesh.position.set(a.x, 0, a.z); animateKid(a.mesh, false, dt, state.t); }); zoomNow = 1; view(0, 3); if (pressed('Enter') || pressed('Space')) start(); },
     draw() { drawWorld(); },
   },
   play: { update: playStep, draw() { drawWorld(); drawHud(); } },
@@ -501,6 +539,8 @@ SHIRTS.slice(0, 8).forEach((c, i) => { const b = document.createElement('button'
 $('bStart').onclick = start; $('bResume').onclick = () => setScene('play');
 $('bPause').onclick = () => { if (scene === 'play' && !state.ui) setScene('pause'); };
 $('bMute').onclick = () => setMuted(!muted);
+$('bIn').onclick = () => setZoom(-1); $('bOut').onclick = () => setZoom(1);
+addEventListener('wheel', e => { if (scene === 'play' && !state.ui) setZoom(e.deltaY > 0 ? 1 : -1); }, { passive: true });
 $('act').addEventListener('pointerdown', e => { e.preventDefault(); hit.add('Space'); });
 (function stick() {
   const el = $('stick'), base = $('stickBase'), knob = $('stickKnob'); let id = null;

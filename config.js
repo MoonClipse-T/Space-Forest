@@ -15,6 +15,10 @@ window.CONFIG = {
   curve: { value: 0.011, min: 0, max: 0.03, step: 0.001 },       // how fast the ground rolls away to the north
   interact_range: { value: 2.6, min: 1.5, max: 5, step: 0.1 },   // how near a thing must be to act on it
 
+  zoom_min: { value: 0.7, min: 0.4, max: 1, step: 0.05 },         // closest view, times the normal distance
+  zoom_max: { value: 5, min: 1.5, max: 8, step: 0.5 },            // farthest view: the whole village as a map
+  zoom_step: { value: 1.4, min: 1.1, max: 2, step: 0.05 },        // how much one press of the zoom buttons changes the view
+
   // Getting and building
   bag_size: { value: 4, min: 2, max: 10, step: 1 },              // items the bag holds
   build_time: { value: 1.6, min: 0.4, max: 5, step: 0.1 },       // seconds to fit one part
@@ -27,6 +31,7 @@ window.CONFIG = {
   first_prank_min: { value: 180, min: 0, max: 600, step: 10 },   // seconds before bots may prank the player (the brief: 3 to 5 minutes)
   bot_prank_chance: { value: 0.3, min: 0, max: 1, step: 0.05 },  // chance a bot pranks instead of working, when it can
   stash_min_dist: { value: 10, min: 3, max: 30, step: 1 },       // how far a taken thing must be carried before hiding it
+  chest_count: { value: 6, min: 0, max: 11, step: 1 },            // treasure chests to hide things in
   repair_hits: { value: 3, min: 1, max: 8, step: 1 },            // good presses to tighten the screws
   repair_speed: { value: 0.75, min: 0.2, max: 2, step: 0.05 },   // needle turns per second
   repair_window: { value: 0.2, min: 0.05, max: 0.5, step: 0.01 },// part of the dial that counts as a hit

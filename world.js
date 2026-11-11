@@ -299,6 +299,17 @@ function makePad(spot, color, name) {
   g.add(mesh(cyl(0.05, 0.05, 0.8, 6), mat(WOOD), -1.9, 0.4, 2.28));
   return g;
 }
+function makeChest(x, z) { // a treasure chest: a place to hide things
+  const g = new THREE.Group(); g.position.set(x, 0, z);
+  g.add(mesh(rbox(1.4, 0.72, 0.95, 0.12), mat(0xb9825a), 0, 0.38, 0));
+  const lid = new THREE.Group(); lid.position.set(0, 0.74, -0.46); g.add(lid);
+  lid.add(mesh(rbox(1.48, 0.34, 1.02, 0.16), mat(0xd9a06c), 0, 0.15, 0.46));
+  [-0.45, 0.45].forEach(x2 => { g.add(mesh(rbox(0.16, 0.76, 0.99, 0.05), mat(0xffd166), x2, 0.38, 0)); lid.add(mesh(rbox(0.16, 0.38, 1.06, 0.05), mat(0xffd166), x2, 0.15, 0.46)); });
+  g.add(mesh(starGeo(0.15, 0.05), glow(0xfff3a0), 0, 0.58, 0.5));
+  const spark = mesh(starGeo(0.2, 0.06), glow(0xfff3a0), 0, 1.7, 0); spark.visible = false; g.add(spark);
+  g.add(shadow(1.0)); g.userData = { lid, spark };
+  return g;
+}
 function makeTree(x, z, k) {
   const g = new THREE.Group(); g.position.set(x, 0, z); const c = [0xffb7d5, 0xcdb4ff, 0x8fdcb8, 0xa5d8ff][k % 4];
   g.add(mesh(cyl(0.22, 0.32, 1.6, 8), mat(0xa98b9e), 0, 0.8, 0));

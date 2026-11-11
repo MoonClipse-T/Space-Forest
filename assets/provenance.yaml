@@ -16,3 +16,27 @@
   tool: "esbuild 0.28.2, one plain script for play from a file"
   date: 2026-11-11
   ships: true
+- path: assets/bgm-stone.mp3
+  origin: you
+  source: {product: "Nightmare.mp3", url: "supplied by the teacher"}
+  tool: "played on the 석기 시대 island"
+  date: 2026-11-11
+  ships: true
+- path: assets/bgm-iron.mp3
+  origin: you
+  source: {product: "DownTown.mp3", url: "supplied by the teacher"}
+  tool: "played on the 철기 시대 island"
+  date: 2026-11-11
+  ships: true
+- path: assets/bgm-steam.mp3
+  origin: you
+  source: {product: "Dispute.mp3", url: "supplied by the teacher"}
+  tool: "played on the 산업 시대 island"
+  date: 2026-11-11
+  ships: true
+- path: assets/bgm-space.mp3
+  origin: you
+  source: {product: "NeoCastle.mp3", url: "supplied by the teacher"}
+  tool: "played on the 우주 시대 island"
+  date: 2026-11-11
+  ships: true

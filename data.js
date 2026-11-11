@@ -30,18 +30,18 @@ const PLAN_FIELDS = [
 
 // Six shops, one per technology in the textbook's 그림 13.
 const SHOPS = [
-  // 석기 (zone centre z 225)
-  { id: 'flint', era: 0, name: '부싯돌 바위', keeper: '딱딱 씨', x: -24, z: 211, roof: 0xd9b38c },
-  { id: 'knap', era: 0, name: '돌 깨는 터', keeper: '쾅쾅 씨', x: 24, z: 211, roof: 0xc9a27e },
-  { id: 'ochre', era: 0, name: '황토 물감 굴', keeper: '알록 씨', x: -24, z: 233, roof: 0xf0a070 },
-  // 철기 (zone centre z 160)
-  { id: 'smith', era: 1, name: '대장간', keeper: '쇠돌 씨', x: -24, z: 146, roof: 0xe8c66a },
-  { id: 'farm', era: 1, name: '논두렁 달력집', keeper: '벼리 씨', x: 24, z: 146, roof: 0xe8c66a },
-  { id: 'mason', era: 1, name: '돌 다듬는 집', keeper: '다듬 씨', x: -24, z: 168, roof: 0xe8c66a },
-  // 산업 (zone centre z 95)
-  { id: 'lens', era: 2, name: '렌즈 공방', keeper: '반짝 박사', x: -24, z: 81, roof: 0x8f6f8f },
-  { id: 'steam', era: 2, name: '증기 공장', keeper: '칙칙 씨', x: 24, z: 81, roof: 0x8f6f8f },
-  { id: 'rocketlab', era: 2, name: '로켓 연구소', keeper: '슝슝 박사', x: -24, z: 103, roof: 0x8f6f8f },
+  // 석기 섬 (centre z 900)
+  { id: 'flint', era: 0, name: '부싯돌 바위', keeper: '딱딱 씨', x: -24, z: 886, roof: 0xd9b38c },
+  { id: 'knap', era: 0, name: '돌 깨는 터', keeper: '쾅쾅 씨', x: 24, z: 886, roof: 0xc9a27e },
+  { id: 'ochre', era: 0, name: '황토 물감 굴', keeper: '알록 씨', x: -24, z: 908, roof: 0xf0a070 },
+  // 철기 섬 (centre z 600)
+  { id: 'smith', era: 1, name: '대장간', keeper: '쇠돌 씨', x: -24, z: 586, roof: 0xe8c66a },
+  { id: 'farm', era: 1, name: '논두렁 달력집', keeper: '벼리 씨', x: 24, z: 586, roof: 0xe8c66a },
+  { id: 'mason', era: 1, name: '돌 다듬는 집', keeper: '다듬 씨', x: -24, z: 608, roof: 0xe8c66a },
+  // 산업 섬 (centre z 300)
+  { id: 'lens', era: 2, name: '렌즈 공방', keeper: '반짝 박사', x: -24, z: 286, roof: 0x8f6f8f },
+  { id: 'steam', era: 2, name: '기차 공장', keeper: '칙칙 씨', x: 24, z: 286, roof: 0x8f6f8f },
+  { id: 'rocketlab', era: 2, name: '비행기 공방', keeper: '붕붕 박사', x: -24, z: 308, roof: 0x8f6f8f },
   // 우주
   { id: 'cloth', name: '기능성 옷감 가게', keeper: '보들 씨', x: -23, z: -8, roof: 0xf4a6b8 },
   { id: 'poly', name: '폴리카보네이트 공방', keeper: '단단 씨', x: -23, z: 6, roof: 0x9ad0ec },
@@ -54,36 +54,36 @@ const SHOPS = [
 // Ten parts. Each needs one item from a shop; the keeper asks one thing before handing it over.
 // group: suit (worn), ship (on the rocket), cargo (beside the rocket).
 const PARTS = [
-  // 석기 시대: 불, 도구, 하늘 그림
+  // 석기 시대: 재미로 푸는 넌센스·상식 퀴즈 (교과서 내용은 우주 시대에서)
   { id: 'st_fire', era: 0, group: 'era', name: '모닥불', item: '부싯돌', shop: 'flint',
-    q: '석기 시대 사람들은 불을 어떻게 피웠을까?', a: ['돌을 부딪치거나 나무를 비벼서', '성냥을 그어서', '라이터를 켜서'],
-    fact: '딱! 불꽃이 튀었다. 불이 있으면 밤에도 모여 앉아 하늘을 볼 수 있지.' },
+    q: '모닥불을 피우면 좋은 점이 아닌 것은?', a: ['휴대폰이 충전된다', '몸이 따뜻해진다', '고기를 익혀 먹는다'],
+    fact: '하하, 석기 시대엔 휴대폰이 없지! 대신 불 덕분에 밤에도 모여 앉아 하늘을 봤대.' },
   { id: 'st_axe', era: 0, group: 'era', name: '돌도끼', item: '뗀석기 돌날', shop: 'knap',
-    q: '돌을 깨뜨리고 떼어 내서 만든 도구를 뭐라고 할까?', a: ['뗀석기', '철기', '플라스틱'],
-    fact: '쾅! 날카로운 돌날 완성. 사람은 도구를 만들며 조금씩 더 멀리 나아갔어.' },
+    q: '[넌센스] 돌이 죽으면 뭐라고 할까?', a: ['돌아가셨다', '깨져 버렸다', '굴러갔다'],
+    fact: '돌~아가셨다! 크크. 걱정 마, 이 돌은 멋진 돌도끼로 다시 태어날 거야.' },
   { id: 'st_wall', era: 0, group: 'era', name: '하늘 벽화', item: '황토 물감', shop: 'ochre',
-    q: '옛사람들이 날마다 모양이 바뀌는 것을 보고 날짜를 셌다고 짐작하는 천체는?', a: ['달', '태양', '북극성'],
-    fact: '맞아! 초승달, 반달, 보름달… 달 모양은 하늘에 걸린 첫 달력이었어.' },
-  // 철기 시대: 쇠 도구, 달력, 관측대
+    q: '옛날 동굴 벽화에 가장 많이 그려진 것은?', a: ['들소, 말 같은 동물', '자동차', '아이돌 가수'],
+    fact: '맞아! 프랑스 라스코 동굴에는 들소와 말이 잔뜩 그려져 있어.' },
+  // 철기 시대
   { id: 'ir_tool', era: 1, group: 'era', name: '쇠 낫', item: '쇳덩이', shop: 'smith',
-    q: '철로 만든 도구가 돌 도구보다 좋은 점은?', a: ['더 단단하고 날카롭다', '더 쉽게 깨진다', '물에 둥둥 뜬다'],
-    fact: '땅! 땅! 쇠 도구 덕분에 농사가 잘되고 마을이 커졌지.' },
+    q: '[넌센스] 대장간 화로처럼 세상에서 가장 뜨거운 과일은?', a: ['천도복숭아', '수박', '귤'],
+    fact: '천 도(度) 복숭아! 하하. 쇠를 녹이려면 천 도보다 훨씬 뜨거워야 해.' },
   { id: 'ir_cal', era: 1, group: 'era', name: '돌 달력', item: '볍씨 자루', shop: 'farm',
-    q: '옛사람들이 하늘을 관측해 달력을 만든 가장 큰 까닭은?', a: ['씨 뿌리고 거둘 때를 알려고', '별을 팔려고', '밤에 심심해서'],
-    fact: '그렇지! 해와 달의 움직임을 알면 농사 때를 놓치지 않아.' },
+    q: '달이 차고 기우는 걸 몇 번쯤 보면 한 해가 지나갈까?', a: ['약 12번', '약 3번', '약 100번'],
+    fact: '맞아, 열두 번쯤! 그래서 한 해를 열두 "달"로 나눠.' },
   { id: 'ir_tower', era: 1, group: 'era', name: '작은 첨성대', item: '다듬은 돌', shop: 'mason',
-    q: '신라 시대에 하늘을 관측하려고 돌을 쌓아 만든 것은?', a: ['첨성대', '누리호', '피라미드'],
-    fact: '첨성대! 지금 남아 있는 동양의 천문대 가운데 아주 오래된 것이야.' },
-  // 산업 시대: 망원경, 기계, 로켓의 꿈
+    q: '첨성대를 쌓은 돌은 대략 몇 개일까?', a: ['약 360개', '약 3개', '약 3만 개'],
+    fact: '약 360여 개! 일 년의 날수와 비슷하다는 재미있는 이야기도 있어.' },
+  // 산업 시대: 망원경, 기차, 비행기
   { id: 'in_scope', era: 2, group: 'era', name: '망원경', item: '볼록 렌즈', shop: 'lens',
-    q: '1609년쯤 망원경으로 달 표면과 목성의 위성을 관측한 과학자는?', a: ['갈릴레이', '뉴턴', '다윈'],
-    fact: '갈릴레이! 망원경 덕분에 하늘이 훨씬 가까워졌어.' },
-  { id: 'in_steam', era: 2, group: 'era', name: '증기 기관', item: '톱니바퀴', shop: 'steam',
-    q: '석탄을 태워 물을 끓이고, 그 김의 힘으로 기계를 돌린 것은?', a: ['증기 기관', '태양 전지', '전자레인지'],
-    fact: '칙칙폭폭! 기계의 힘으로 공장과 기차가 달리기 시작했어.' },
-  { id: 'in_rocket', era: 2, group: 'era', name: '시험 로켓', item: '액체 연료', shop: 'rocketlab',
-    q: '로켓이 하늘로 솟구치는 원리는?', a: ['가스를 뒤로 세게 내뿜어서', '날개로 공기를 저어서', '풍선처럼 가벼워서'],
-    fact: '슝! 1926년 고다드가 처음으로 액체 연료 로켓을 쏘아 올렸어.' },
+    q: '갈릴레이가 망원경으로 처음 본 것이 아닌 것은?', a: ['외계인의 집', '달의 울퉁불퉁한 산', '목성 둘레를 도는 위성'],
+    fact: '외계인 집은 못 봤지! 대신 달의 산과 목성의 위성 넷을 찾아냈어.' },
+  { id: 'in_steam', era: 2, group: 'era', name: '증기 기관차', item: '톱니바퀴', shop: 'steam',
+    q: '증기 기관차는 무엇을 태워서 달렸을까?', a: ['석탄', '아이스크림', '건전지'],
+    fact: '칙칙폭폭! 석탄으로 물을 끓여 나온 김의 힘으로 달렸어.' },
+  { id: 'in_plane', era: 2, group: 'era', name: '비행기', item: '프로펠러', shop: 'rocketlab',
+    q: '1903년에 처음으로 동력 비행기를 날린 사람들은?', a: ['라이트 형제', '흥부와 놀부', '해님 달님 오누이'],
+    fact: '라이트 형제! 첫 비행은 겨우 12초였대. 이제 하늘 다음은… 우주!' },
   // 우주 시대
   { id: 'suit', group: 'suit', name: '우주복 몸체', item: '기능성 옷감', shop: 'cloth',
     q: '이 옷감, 원래 뭘 만들려고 개발한 신소재게?', a: ['우주복', '수영복', '한복'],
@@ -124,12 +124,13 @@ const SHIRTS = [0xff8fa3, 0x7cc6fe, 0xffd166, 0x95e1a3, 0xc9a0ff, 0xffa26b, 0x6e
 const SHIRT_NAMES = ['분홍', '하늘', '노랑', '연두', '보라', '주황', '민트', '자주', '파랑', '라임', '빨강', '청록', '살구', '연보라', '물빛'];
 
 // Where things stand. x is east, z is south; the camera always looks north.
-// The journey runs north: 석기 (far south) → 철기 → 산업 → 우주 (the old village, launch pad furthest north).
-const ERA_Z = [225, 160, 95];   // centre of each of the first three eras
-const GATE_Z = [192, 127, 62];  // the time gate on the north edge of each of them
-const zoneOf = z => (z > GATE_Z[0] ? 0 : z > GATE_Z[1] ? 1 : z > GATE_Z[2] ? 2 : 3);
+// Every era is its own island, far apart; a portal on each island's north hill takes you to the next one.
+const ERA_Z = [900, 600, 300];  // centre of the first three islands; the space village sits round z 10
+const zoneOf = z => (z > 750 ? 0 : z > 450 ? 1 : z > 150 ? 2 : 3);
+const PORTAL = ERA_Z.map((zc, e) => ({ x: 0, z: zc - 37, portal: true, era: e })); // up on the hill, opens on the teacher's OK
+const ARRIVE = [null, { x: 0, z: ERA_Z[1] + 25 }, { x: 0, z: ERA_Z[2] + 25 }, { x: 0, z: 61 }]; // where you land on the next island
 const PLACES = {
-  spawn: { x: 0, z: 249 },      // everyone wakes up in the 석기 시대
+  spawn: { x: 0, z: 925 },      // everyone wakes up on the 석기 시대 island
   gacha: { x: -4.5, z: -2 },
   desk: { x: 7, z: -9.5 },
   hq: { x: 7, z: -15 },
@@ -141,39 +142,40 @@ ERA_Z.forEach((zc, e) => [0, 1, 2, 3, 4, 5].forEach(r => [0, -6, 6, -12, 12].for
 [13, 21, 29, 37, 45, 53].forEach(z => [0, -6.5, 6.5, -13, 13].forEach(x => PAD_SPOTS[3].push({ x, z })));
 // Places to hide a taken thing, per era; the first chest_count of each era are treasure chests.
 const HIDE_SPOTS = [
-  { era: 3, x: -14, z: -20 }, { era: 3, x: 15, z: -22 }, { era: 3, x: -31, z: -1 }, { era: 3, x: 31, z: 13 }, { era: 3, x: -31, z: 13 },
+  { era: 3, x: -14, z: -30 }, { era: 3, x: 15, z: -32 }, { era: 3, x: -31, z: -1 }, { era: 3, x: 31, z: 13 }, { era: 3, x: -31, z: 13 },
   { era: 3, x: 31, z: -1 }, { era: 3, x: -30, z: 40 }, { era: 3, x: 30, z: 40 }, { era: 3, x: -12, z: -4 }, { era: 3, x: 13, z: 1 },
 ];
-ERA_Z.forEach((zc, era) => [[-36, -24], [36, -24], [-36, 22], [36, 24], [-16, -26], [-14, 26]].forEach(([x, dz]) => HIDE_SPOTS.push({ era, x, z: zc + dz })));
+[[[-43, 12], [35, -12], [-16, -30], [30, 24], [-14, 27], [20, -30]], // 석기: one chest across the river, one on the hill
+ [[43, -2], [-35, -12], [16, -30], [-30, 24], [14, 27], [-20, -30]],   // 철기
+ [[-34, -10], [28, -8], [-16, -30], [-30, 22], [6, 35], [20, -30]]]  // 산업: one down on the beach
+  .forEach((list, era) => list.forEach(([x, dz]) => HIDE_SPOTS.push({ era, x, z: ERA_Z[era] + dz })));
 
-// The four eras. Each has its own words for the three pranks, and (all but the last) a test the teacher OKs.
+// The four eras. Each has its own words for the three pranks. The first three are for fun and end in a drawing the
+// teacher OKs; the space age is the textbook part, with its quizzes and the written exploration plan.
 const ERAS = [
   { id: 'stone', name: '석기 시대', when: '약 1만 년 전', motto: '하늘을 처음 올려다본 사람들', ground: 0xf0e0b4,
     chief: '족장 우가', work: '모닥불 자리',
-    intro: ['우가! 여긴 석기 시대야. 아직 글자도 없지만, 밤하늘은 누구나 올려다보지.', '부싯돌로 불을 피우고, 돌도끼를 만들고, 동굴 벽에 하늘을 그려 와.', '다 만들면 나한테 와서 시험을 봐. 선생님이 OK 하시면 북쪽 시간의 문이 열려!'],
-    test: { title: '동굴 벽화 시험', draw: true, ask: '부족에게 밤하늘을 남겨 줘! 네가 본 달과 별을 동굴 벽에 그려 봐.',
-      fields: [{ key: 'title', label: '벽화 제목', ph: '예: 보름달 뜬 사냥 밤', short: true }, { key: 'why', label: '이 그림을 본 부족은 무엇을 알게 될까?', ph: '예: 달 모양으로 날짜를 셀 수 있다' }] },
+    intro: ['우가! 여긴 석기 시대야. 아직 글자도 없지만, 밤하늘은 누구나 올려다보지.', '부싯돌로 불을 피우고, 돌도끼를 만들고, 동굴 벽에 하늘을 그려 와.', '다 만들면 나한테 와서 그림 시험을 봐. 선생님이 OK 하시면 언덕 위 시간의 포탈이 열려!'],
+    test: { title: '동굴 벽화 시험', paper: 'cave', ask: '부족에게 밤하늘을 남겨 줘! 네가 본 달과 별을 동굴 벽에 그려 봐.' },
     loose: { act: '모닥불에 흙 뿌리기', done: '모닥불이 꺼졌다!', fix: '불씨 살리기', game: '부싯돌 딱! 초록 칸에서 치기', fixed: '불이 다시 활활 탄다!', need: 'st_fire', already: '이미 불이 꺼져 있어', check: '꺼진 모닥불' },
     doodle: { act: '벽화에 진흙 칠하기', done: '벽화에 진흙이 묻었다!', fix: '진흙 닦기', fixed: '벽화가 깨끗해졌다!', on: 'st_wall', already: '이미 진흙투성이야', none: '칠할 벽화가 없어', check: '진흙 묻은 벽화', color: 0x8a5a36 } },
   { id: 'iron', name: '철기 시대', when: '약 2,500년 전', motto: '하늘을 읽어 농사를 짓다', ground: 0xcdeaa8,
     chief: '촌장 해달', work: '관측 마당',
-    intro: ['어서 와, 철기 마을이야! 쇠로 만든 도구 덕분에 농사가 잘되지.', '쇠 낫을 벼리고, 하늘을 보고 돌 달력을 만들고, 작은 첨성대를 쌓아 와.', '다 되면 나한테 시험을 봐. 선생님 OK가 나면 산업 시대로 가는 문이 열려.'],
-    test: { title: '하늘 읽기 시험', ask: '마을 사람들이 왜 하늘을 봐야 하는지 설명해 줘.',
-      fields: [{ key: 'why', label: '하늘을 관측하면 사람들 생활에 어떤 도움이 될까?', ph: '예: 씨 뿌릴 때와 거둘 때를 알 수 있다' }, { key: 'see', label: '첨성대에 올라가면 무엇을 관측하고 싶어?', ph: '예: 달이 차고 기우는 날짜' }] },
+    intro: ['어서 와, 철기 마을이야! 쇠로 만든 도구 덕분에 농사가 잘되지.', '쇠 낫을 벼리고, 하늘을 보고 돌 달력을 만들고, 작은 첨성대를 쌓아 와.', '다 되면 나한테 그림 시험을 봐. 선생님 OK가 나면 산업 시대로 가는 포탈이 열려.'],
+    test: { title: '철기 마을 그림 시험', paper: 'hanji', ask: '철기 마을에 있을 법한 동물이나 물건을 그려 봐! 소, 쇠 낫, 초가집, 첨성대… 뭐든 좋아.' },
     loose: { act: '풀무 바람 빼기', done: '화로 불이 식어 버렸다!', fix: '풀무 밟기', game: '풀무 쿵! 초록 칸에서 밟기', fixed: '화로가 다시 벌겋게 달았다!', need: 'ir_tool', already: '이미 화로가 식어 있어', check: '식은 화로' },
     doodle: { act: '녹물 칠하기', done: '돌 달력에 녹물이 번졌다!', fix: '녹물 닦기', fixed: '달력이 깨끗해졌다!', on: 'ir_cal', already: '이미 녹물투성이야', none: '칠할 달력이 없어', check: '녹물 번진 달력', color: 0xc0602a } },
-  { id: 'steam', name: '산업 시대', when: '약 100~300년 전', motto: '망원경과 로켓의 꿈', ground: 0xd9d2e6,
+  { id: 'steam', name: '산업 시대', when: '약 100~300년 전', motto: '망원경과 기차, 하늘을 나는 꿈', ground: 0xd9d2e6,
     chief: '발명 박사 뚝딱', work: '발명 작업대',
-    intro: ['산업 시대에 온 걸 환영해! 칙칙폭폭, 기계가 세상을 바꾸고 있지.', '망원경으로 하늘을 당겨 보고, 증기 기관을 돌리고, 시험 로켓을 만들어 와.', '셋 다 되면 나한테 시험을 봐. 선생님 OK면 드디어 우주 시대야!'],
-    test: { title: '로켓의 꿈 시험', ask: '망원경과 로켓이 생겼어. 이제 인류는 무엇을 꿈꿀까?',
-      fields: [{ key: 'dream', label: '망원경과 로켓이 생긴 지금, 인류는 우주에서 무엇을 하고 싶어 할까?', ph: '예: 달에 직접 가 보고 싶다' }, { key: 'news', label: '우리 마을 첫 로켓 발사! 신문 제목을 지어 봐', ph: '예: 하늘을 찌른 연필 로켓', short: true }] },
-    loose: { act: '톱니 빼 놓기', done: '증기 기관이 멈췄다!', fix: '톱니 끼우기', game: '톱니 착! 초록 칸에서 끼우기', fixed: '증기 기관이 다시 칙칙폭폭!', need: 'in_steam', already: '이미 기관이 멈춰 있어', check: '멈춘 증기 기관' },
+    intro: ['산업 시대에 온 걸 환영해! 칙칙폭폭, 기계가 세상을 바꾸고 있지.', '망원경으로 하늘을 당겨 보고, 증기 기관차를 만들고, 비행기를 띄워 봐.', '셋 다 되면 나한테 그림 시험을 봐. 선생님 OK면 드디어 우주 시대야!'],
+    test: { title: '탈것 발명 시험', paper: 'blueprint', ask: '산업 시대의 탈것을 설계도에 그려 봐! 칙칙폭폭 기차나 하늘을 나는 비행기.' },
+    loose: { act: '톱니 빼 놓기', done: '증기 기관차가 멈췄다!', fix: '톱니 끼우기', game: '톱니 착! 초록 칸에서 끼우기', fixed: '기관차가 다시 칙칙폭폭!', need: 'in_steam', already: '이미 기관차가 멈춰 있어', check: '멈춘 기관차' },
     doodle: { act: '기름 얼룩 묻히기', done: '망원경 렌즈에 기름 얼룩이!', fix: '렌즈 닦기', fixed: '렌즈가 반짝반짝!', on: 'in_scope', already: '이미 얼룩투성이야', none: '얼룩질 망원경이 없어', check: '기름 묻은 렌즈', color: 0x4a4060 } },
   { id: 'space', name: '우주 시대', when: '1957년 ~ 지금', motto: '드디어 우주로!', ground: 0x9fe6c3,
     chief: '도장 로봇', work: '내 작업장',
     loose: { act: '나사 풀기', done: '우주선 나사가 풀렸다!', fix: '나사 조이기', game: '바늘이 초록 칸에 올 때 누르기!', fixed: '나사를 꽉 조였다!', need: '', already: '이미 나사가 풀려 있어', check: '풀린 나사' },
     doodle: { act: '낙서하기', done: '우주선에 낙서가 생겼다!', fix: '낙서 지우기', fixed: '반짝반짝! 낙서를 다 지웠다', on: 'hull', already: '이미 낙서투성이야', none: '낙서할 몸체가 없어', check: '낙서' } },
 ];
-// Each early era's chief stands by its time gate and gives the test.
-const CHIEF_SPOT = e => ({ x: -5, z: GATE_Z[e] + 6 });
+// Each early era's chief stands by its portal and gives the test.
+const CHIEF_SPOT = e => ({ x: -5, z: PORTAL[e].z + 4 });
 const TEACHER_PIN = '1004'; // 학생 기기에서 선생님이 OK를 누를 때 쓰는 암호 (바꿔 쓰세요)

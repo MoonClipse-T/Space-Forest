@@ -23,6 +23,7 @@
   #partIcons { display: grid; grid-template-columns: repeat(5, 34px); gap: 4px; } #eraLine { font-size: 14px; line-height: 1.25; }
   #eraBanner { position: absolute; left: 50%; top: 24%; transform: translateX(-50%); text-align: center; color: #fff8e8; text-shadow: 0 4px 0 var(--ink); pointer-events: none !important; opacity: 0; white-space: nowrap; }
   #eraBanner small { display: block; font-size: 22px; } #eraBanner b { display: block; font-size: 64px; letter-spacing: 6px; } #eraBanner span { display: block; font-size: 24px; }
+  #warp { position: absolute; inset: 0; pointer-events: none !important; opacity: 0; z-index: 4; background: radial-gradient(circle, #ffffff 0%, #fff6d8 45%, #ffd6f0 100%); }
   #eraBanner.show { animation: eraIn 4.2s ease-out forwards; }
   @keyframes eraIn { 0% { opacity: 0; transform: translate(-50%, 16px); } 12% { opacity: 1; transform: translate(-50%, 0); } 78% { opacity: 1; } 100% { opacity: 0; } }
   @media (prefers-reduced-motion: reduce) { #eraBanner.show { animation-name: eraFade; } @keyframes eraFade { 0%, 80% { opacity: 1; } 100% { opacity: 0; } } }
@@ -100,6 +101,7 @@
   <div id="stick"><div id="stickBase"><div id="stickKnob"></div></div></div>
   <div id="parts"><div id="eraLine"></div><div id="partIcons"></div></div>
   <div id="eraBanner" class="hide"></div>
+  <div id="warp"></div>
   <div id="questbox"><div id="quest" class="pill"></div><div id="toasts"></div></div>
   <div id="zoomer"><button class="btn" id="bIn">확대</button><button class="btn" id="bOut">축소</button></div>
   <div id="top"><div id="rank" class="pill"></div><button class="btn" id="bPause">쉬기</button><button class="btn" id="bMute">소리 켬</button></div>
@@ -113,9 +115,9 @@
     <div class="panel">
       <input id="nameIn" maxlength="8" placeholder="내 이름 (8자까지)" autocomplete="off">
       <div id="swatches"></div>
-      <div class="keys">왼쪽 조이스틱 또는 방향키·WASD: 걷기<br>노란 버튼 또는 스페이스: 말 걸기·줍기·만들기·장난<br>시대마다 문지기의 시험을 보고 선생님 OK를 받으면 북쪽 시간의 문이 열려요<br>확대·축소 버튼 또는 마우스 휠, +/- 키: 지도처럼 멀리 보기<br>P: 쉬기 · M: 소리</div>
+      <div class="keys">왼쪽 조이스틱 또는 방향키·WASD: 걷기<br>노란 버튼 또는 스페이스: 말 걸기·줍기·만들기·장난<br>시대마다 섬이 달라요. 문지기에게 그림 시험을 보고 선생님 OK를 받으면 언덕 위 포탈이 열려요<br>확대·축소 버튼 또는 마우스 휠, +/- 키: 지도처럼 멀리 보기<br>P: 쉬기 · M: 소리</div>
     </div>
-    <button class="big" id="bStart">연구소로 들어가기 (Enter)</button>
+    <button class="big" id="bStart">시간 여행 시작 (Enter)</button>
     <p style="font-size:16px">이 판의 친구들은 이름에 "봇"이 붙은 컴퓨터 친구예요. 선생님 화면은 주소 끝에 ?teacher=1</p>
   </div>
   <div id="pause" class="screen hide"><div class="panel" style="text-align:center;font-size:30px">잠깐 쉬는 중<div class="keys">P 또는 아래 버튼으로 돌아가기</div></div><button class="big" id="bResume">계속하기</button></div>
@@ -124,6 +126,7 @@
 <script src="vendor/three.js"></script>
 <script src="config.js"></script>
 <script src="data.js"></script>
+<script src="terrain.js"></script>
 <script src="world.js"></script>
 <script>
 'use strict';

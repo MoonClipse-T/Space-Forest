@@ -28,7 +28,16 @@ function sfx(k) {
   if (k === 'blip') tone(520 + (state.t * 997 % 180), 0.04, 'triangle', 0.1);
   if (k === 'stamp') { tone(140, 0.15, 'square', 0.25); tone(880, 0.3, 'triangle', 0.2, 0.1); }
   if (k === 'launch') for (let i = 0; i < 14; i++) tone(90 + i * 22, 0.3, 'sawtooth', 0.1, i * 0.12);
+  if (k === 'warp') [392, 523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.22, 'sine', 0.2, i * 0.07));
   if (k === 'alarm') [880, 660, 880, 660].forEach((f, i) => tone(f, 0.12, 'square', 0.1, i * 0.13));
+}
+// ---- Music: each island its own track (files the teacher chose), started by the first press ----------
+const BGM = ['assets/bgm-stone.mp3', 'assets/bgm-iron.mp3', 'assets/bgm-steam.mp3', 'assets/bgm-space.mp3'], tracks = [];
+let bgmOn = -1;
+function music(e) { // switch to island e's track; quiet while muted
+  const v = muted ? 0 : tune.volume * 0.5;
+  if (bgmOn !== e && audio) { if (tracks[bgmOn]) tracks[bgmOn].pause(); bgmOn = e; const t = tracks[e] || (tracks[e] = Object.assign(new Audio(BGM[e]), { loop: true })); t.currentTime = 0; t.volume = v; t.play().catch(() => { bgmOn = -1; }); }
+  if (tracks[bgmOn]) tracks[bgmOn].volume = v;
 }
 function toast(msg, kind) { state.toasts.push({ msg, kind: kind || '', t: 4.5 }); state.hud = ''; }
 
@@ -51,7 +60,7 @@ function pollReq() {
     if (p.status === 'back') { m.planStatus = 'back'; state.planNote = p.note; toast('계획서가 돌아왔어. 책상에서 고쳐 쓰자', 'bad'); sfx('bad'); }
   } else if (m.testStatus === 'sent') {
     if (p.status === 'ok') { events.push('approved:' + e); advance(m); }
-    if (p.status === 'back') { m.testStatus = 'back'; state.testNote = p.note; toast(`시험지가 돌아왔어. ${ERAS[e].chief}에게 가서 고쳐 내자`, 'bad'); sfx('bad'); }
+    if (p.status === 'back') { m.testStatus = 'back'; state.testNote = p.note; toast(`그림이 돌아왔어. ${ERAS[e].chief}에게 가서 다시 그려 보자`, 'bad'); sfx('bad'); }
   }
 }
 
@@ -61,27 +70,28 @@ function reset() {
   if (dyn) W3.scene.remove(dyn);
   dyn = new THREE.Group(); W3.scene.add(dyn); $('tags').innerHTML = ''; lineup = null;
   closeUI(true); savePlans({});
-  state = { t: 0, score: 0, gained: '', actors: [], hidden: [], chests: [], foot: [], fx: [], toasts: [], bag: [], ui: null, act: null, fame: [], plan: {}, planNote: '', tests: {}, testNote: '', met: {}, seenEra: -1, sulk: {}, staged: false, near: null, launching: null, joy: { x: 0, z: 0 }, hud: '', questText: '' };
+  state = { sparks: [], warp: null, t: 0, score: 0, gained: '', actors: [], hidden: [], chests: [], foot: [], fx: [], toasts: [], bag: [], ui: null, act: null, fame: [], plan: {}, planNote: '', tests: {}, testNote: '', met: {}, seenEra: -1, sulk: {}, staged: false, near: null, launching: null, joy: { x: 0, z: 0 }, hud: '', questText: '' };
   COL = [{ x: PLACES.hq.x, z: PLACES.hq.z, r: 4.7 }, { x: PLACES.gacha.x, z: PLACES.gacha.z, r: 1.2 }, { x: PLACES.desk.x, z: PLACES.desk.z, r: 1.4 }, { x: PLACES.desk.x + 2.6, z: PLACES.desk.z + 0.2, r: 0.7 }];
   SHOPS.forEach(s => { COL.push({ x: s.x, z: s.z, r: 3.7 }); const k = keeperSpot(s); COL.push({ x: k.x, z: k.z, r: 0.75 }); });
-  GATE_Z.forEach(gz => { for (let x = 3.3; x < 46; x += 1.3) [-1, 1].forEach(k => COL.push({ x: k * x, z: gz, r: 0.75 })); }); // the walls either side of each time gate
-  [[30, ERA_Z[0] + 8, 5.6], [-10, ERA_Z[0] - 23, 1.9], [30, ERA_Z[1] + 8, 2.6], [-34, ERA_Z[1] - 6, 1.8], [34, ERA_Z[1] - 8, 1.8], [-30, ERA_Z[1] + 12, 1.8], [30, ERA_Z[2] + 8, 4.9], [-34, ERA_Z[2] - 6, 2.9], [-10, ERA_Z[2] - 23, 1.0]].forEach(([x, z, r]) => COL.push({ x, z, r }));
-  keepers = SHOPS.map((s, i) => { const k = keeperSpot(s), m = s.era === 3 ? makeKeeper(s.id) : makeVillager(s.era, i); m.position.set(k.x, 0, k.z); m.rotation.y = s.x < 0 ? 0.5 : -0.5; dyn.add(m); return { id: s.id, name: s.keeper, x: k.x, z: k.z, y: s.era === 3 ? 3.1 : 3.3, mesh: m, tag: tag(s.keeper, 'npc') }; });
-  ERA_Z.forEach((zc, e) => { const c = CHIEF_SPOT(e), m = makeVillager(e, 3); m.scale.setScalar(1.4); m.position.set(c.x, 0, c.z); dyn.add(m); COL.push({ x: c.x, z: c.z, r: 0.8 }); keepers.push({ id: 'chief', era: e, name: ERAS[e].chief, x: c.x, z: c.z, y: 3.8, mesh: m, tag: tag(ERAS[e].chief + ' (문지기)', 'npc') }); });
+  W3.solids.forEach(c => COL.push(c)); // houses, trees, landmarks on the islands
+  PORTAL.forEach((p, e) => COL.push({ x: p.x, z: p.z, r: 1.7, portal: true, era: e })); // a shut portal is a wall; an open one you walk into
+
+  keepers = SHOPS.map((s, i) => { const k = keeperSpot(s), m = s.era === 3 ? makeKeeper(s.id) : makeVillager(s.era, i); m.position.set(k.x, gh(k.x, k.z), k.z); m.rotation.y = s.x < 0 ? 0.5 : -0.5; dyn.add(m); return { id: s.id, name: s.keeper, x: k.x, z: k.z, y: s.era === 3 ? 3.1 : 3.3, mesh: m, tag: tag(s.keeper, 'npc') }; });
+  ERA_Z.forEach((zc, e) => { const c = CHIEF_SPOT(e), m = makeVillager(e, 3); m.scale.setScalar(1.4); m.position.set(c.x, gh(c.x, c.z), c.z); dyn.add(m); COL.push({ x: c.x, z: c.z, r: 0.8 }); keepers.push({ id: 'chief', era: e, name: ERAS[e].chief, x: c.x, z: c.z, y: 3.8, mesh: m, tag: tag(ERAS[e].chief + ' (문지기)', 'npc') }); });
   const g = makeKeeper('guide'); g.position.set(PLACES.desk.x + 2.6, 0, PLACES.desk.z + 0.2); dyn.add(g);
   keepers.push({ id: 'guide', name: GUIDE, x: g.position.x, z: g.position.z, y: 2.8, mesh: g, tag: tag(GUIDE, 'npc') });
   places = SHOPS.map(s => ({ x: s.x, y: 4.6, z: s.z + 2.8, tag: tag(s.name, 'place') }));
   places.push({ x: PLACES.hq.x, y: 4.2, z: PLACES.hq.z + 4.5, tag: tag('탐사 본부', 'place') }, { x: PLACES.gacha.x, y: 4.1, z: PLACES.gacha.z, tag: tag('임무 뽑기', 'place') }, { x: PLACES.desk.x - 1.2, y: 2.5, z: PLACES.desk.z, tag: tag('계획서 책상', 'place') },
     { x: PLACES.launch.x, y: 3.3, z: PLACES.launch.z, tag: tag('발사대', 'place') }, { x: 0, y: 1.9, z: 0, tag: tag('내 작업장', 'place'), mine: true });
-  GATE_Z.forEach((gz, e) => places.push({ x: 0, y: 8.2, z: gz, tag: tag('시간의 문 → ' + ERAS[e + 1].name, 'place') }));
-  ERAS.forEach((E, e) => HIDE_SPOTS.filter(h => h.era === e).slice(0, tune.chest_count).forEach(h => { const g2 = makeChest(h.x, h.z); dyn.add(g2); state.chests.push({ x: h.x, z: h.z, g: g2, items: 0, era: e }); COL.push({ x: h.x, z: h.z, r: 0.8 }); }));
-  const n = 1 + Math.min(tune.bot_count, BOT_NAMES.length, PAD_SPOTS[0].length - 1);
+
+  ERAS.forEach((E, e) => HIDE_SPOTS.filter(h => h.era === e).slice(0, tune.chest_count).forEach(h => { const g2 = makeChest(h.x, h.z); g2.position.y = gh(h.x, h.z); dyn.add(g2); state.chests.push({ x: h.x, z: h.z, g: g2, items: 0, era: e }); COL.push({ x: h.x, z: h.z, r: 0.8 }); }));
+  navReset(); const n = 1 + Math.min(tune.bot_count, BOT_NAMES.length, PAD_SPOTS[0].length - 1);
   const myName = ($('nameIn').value.trim() || '나').slice(0, 8);
   for (let i = 0; i < n; i++) {
     const bot = i > 0, si = (myShirt + i) % SHIRTS.length, ang = Math.PI + rng() * Math.PI, rad = 3.5 + rng() * 4;
     const a = { i, bot, name: bot ? BOT_NAMES[i - 1] : myName, shirt: SHIRTS[si], shirtName: SHIRT_NAMES[si], x: bot ? PLACES.spawn.x + Math.cos(ang) * rad * 1.6 : PLACES.spawn.x, z: bot ? PLACES.spawn.z + Math.sin(ang) * rad : PLACES.spawn.z, face: 0, moving: false,
       mission: bot ? pick(MISSIONS) : null, stage: 0, testStatus: 'none', eraTime: [], planStatus: 'none', parts: {}, order: [], away: {}, loose: false, doodle: false, shieldUntil: 0, prankReady: bot ? 60 + rng() * 120 : 0, lastVictim: -1, tasks: [], pace: 0.7 + rng() * 0.9, launched: false, carry: null };
-    a.mesh = makeKid({ shirt: a.shirt, hair: i % 5, hairColor: HAIR[(i * 3) % HAIR.length] }); dyn.add(a.mesh);
+    a.h = gh(a.x, a.z); a.mesh = makeKid({ shirt: a.shirt, hair: i % 5, hairColor: HAIR[(i * 3) % HAIR.length] }); dyn.add(a.mesh);
     placeWork(a);
     a.tag = tag(a.name, bot ? '' : 'me'); state.actors.push(a);
   }
@@ -113,7 +123,7 @@ function refreshActor(a) {
   Object.keys(u.parts).forEach(k => { u.parts[k].visible = !!a.parts[k]; });
   u.ghost.visible = a.stage === 3 ? !a.parts.hull : !count(a); u.scribble.visible = a.doodle;
   if (u.live) u.live.forEach(m => { m.userData.live.visible = !a.loose; });
-  dressKid(a.mesh, a.parts);
+  dressKid(a.mesh, a.parts, a.stage);
   const h = a.mesh.userData.hold; while (h.children.length) h.remove(h.children[0]);
   if (a.carry) { const m = partMesh(a.carry.part); m.scale.setScalar(1.4); h.add(m); }
   state.hud = '';
@@ -124,16 +134,19 @@ function install(a, id) { a.parts[id] = true; if (PART[id].group !== 'suit') a.o
 // ---- Walking ---------------------------------------------------------------------------------
 function walk(a, dx, dz, sp, dt) {
   const l = Math.hypot(dx, dz); if (l < 0.01) { a.moving = false; return; }
-  dx /= l; dz /= l; a.moving = true; a.x += dx * sp * dt; a.z += dz * sp * dt;
+  dx /= l; dz /= l; a.moving = true; const ox = a.x, oz = a.z; let x = a.x + dx * sp * dt, z = a.z + dz * sp * dt;
   let d = Math.atan2(dx, dz) - a.face; d = Math.atan2(Math.sin(d), Math.cos(d)); a.face += d * Math.min(1, dt * 14);
   for (const c of COL) {
-    const ox = a.x - c.x, oz = a.z - c.z, r = c.r + 0.45, q = Math.hypot(ox, oz);
+    if (Math.abs(z - c.z) > c.r + 1 || (c.portal && a.stage > c.era)) continue;
+    const px = x - c.x, pz = z - c.z, r = c.r + 0.45, q = Math.hypot(px, pz);
     if (q < r && q > 0.001) { // pushed out, and slid round the side it was heading for
-      const nx = ox / q, nz = oz / q, side = (-nz * dx + nx * dz) >= 0 ? 1 : -1;
-      a.x = c.x + nx * r - nz * side * sp * dt * 0.7; a.z = c.z + nz * r + nx * side * sp * dt * 0.7;
+      const nx = px / q, nz = pz / q, side = (-nz * dx + nx * dz) >= 0 ? 1 : -1;
+      x = c.x + nx * r - nz * side * sp * dt * 0.7; z = c.z + nz * r + nx * side * sp * dt * 0.7;
     }
   }
-  a.x = Math.max(-40, Math.min(40, a.x)); a.z = Math.max(a.stage < 3 ? GATE_Z[a.stage] + 0.9 : -35, Math.min(258, a.z));
+  const ok = (x2, z2) => { const h = walkH(x2, z2); return h !== null && Math.abs(h - a.h) <= 1.2 * Math.hypot(x2 - ox, z2 - oz) + 0.02; }; // a cliff is too steep to walk
+  if (ok(x, z)) { a.x = x; a.z = z; } else if (ok(x, oz)) a.x = x; else if (ok(ox, z)) a.z = z;
+  const h = walkH(a.x, a.z); if (h !== null) a.h = h;
 }
 
 // ---- Pranks: small delays, never a reset -----------------------------------------------------
@@ -155,7 +168,7 @@ function prank(by, v, kind) {
   by.prankReady = state.t + tune.prank_cooldown; by.lastVictim = v.i; v.shieldUntil = state.t + tune.pad_shield;
   const s = padStand(v), dx = by.x - v.pad.x, dz = by.z - v.pad.z, l = Math.hypot(dx, dz) || 1;
   for (let k = 0; k < 6; k++) { // footprints in the prankster's shirt colour
-    const f = mesh(ball(0.16), mat(by.shirt), s.x + dx / l * k * 0.75 + (k % 2 ? 0.18 : -0.18), 0.05, s.z + dz / l * k * 0.75); f.scale.set(0.8, 0.15, 1.3); f.rotation.y = Math.atan2(dx, dz); dyn.add(f); state.foot.push({ m: f, t: 90 });
+    const f = mesh(ball(0.16), mat(by.shirt), s.x + dx / l * k * 0.75 + (k % 2 ? 0.18 : -0.18), gh(s.x, s.z) + 0.05, s.z + dz / l * k * 0.75); f.scale.set(0.8, 0.15, 1.3); f.rotation.y = Math.atan2(dx, dz); dyn.add(f); state.foot.push({ m: f, t: 90 });
   }
   let what = '';
   if (kind === 'loose') { v.loose = true; what = ERAS[v.stage].loose.done; }
@@ -168,7 +181,7 @@ function stash(by, x, z, chest) { // on the ground where it sparkles, or out of 
   const c = by.carry; by.carry = null; refreshActor(by);
   if (chest) { chest.items++; state.hidden.push({ owner: c.owner, part: c.part, x: chest.x, z: chest.z, chest }); showChest(chest); }
   else {
-    const g = new THREE.Group(); g.position.set(x, 0, z); const p = partMesh(c.part); p.position.y = 0.4; g.add(p);
+    const g = new THREE.Group(); g.position.set(x, gh(x, z), z); const p = partMesh(c.part); p.position.y = 0.4; g.add(p);
     const st = mesh(starGeo(0.22, 0.06), glow(0xfff3a0), 0, 1.5, 0); g.add(st); dyn.add(g);
     state.hidden.push({ owner: c.owner, part: c.part, x, z, g, st });
   }
@@ -214,28 +227,38 @@ function botStep(a, dt) {
   if (a.launched) return;
   if (!a.tasks.length) botThink(a);
   const k = a.tasks[0]; if (!k) { a.moving = false; return; }
-  if (k.go) { const tg = waypoint(a, k.go), dx = tg.x - a.x, dz = tg.z - a.z; if (Math.hypot(dx, dz) < 0.4) { if (tg === k.go) a.tasks.shift(); a.moving = false; return; }
-    walk(a, dx, dz, tune.bot_speed * (a.carry ? 1.15 : 1), dt);
+  if (k.go) {
+    const tg = waypoint(a, k.go);
+    if (Math.hypot(tg.x - a.x, tg.z - a.z) < (tg.portal ? 1.2 : 0.4)) { if (tg.portal) warpBot(a); else { if (tg === k.go) a.tasks.shift(); a.moving = false; } return; }
+    if (k.pt !== tg) { k.pt = tg; k.path = findPath(a.x, a.z, tg) || [tg]; }
+    while (k.path.length > 1 && Math.hypot(k.path[0].x - a.x, k.path[0].z - a.z) < 0.6) k.path.shift();
+    const p = k.path[0]; walk(a, p.x - a.x, p.z - a.z, tune.bot_speed * (a.carry ? 1.15 : 1), dt);
     const d = Math.hypot(tg.x - a.x, tg.z - a.z); // not getting any closer for a while: wedged, so step aside to a free spot
     if (a.gainFor !== tg.x + tg.z || d < a.best - 0.3) { a.gainFor = tg.x + tg.z; a.best = d; a.noGain = 0; } else if ((a.noGain += dt) > 1.5) {
-      a.noGain = 0; if (k.side) { a.tasks.shift(); return; }
-      const minZ = a.stage < 3 ? GATE_Z[a.stage] + 1.5 : -34, r0 = rng() * 8;
-      for (let j = 0; j < 8; j++) { const ang = (r0 + j) * Math.PI / 4, p = { x: a.x + Math.cos(ang) * 5, z: Math.max(minZ, a.z + Math.sin(ang) * 5) };
-        if (Math.abs(p.x) < 40 && !COL.some(c => Math.hypot(p.x - c.x, p.z - c.z) < c.r + 0.8)) { a.tasks.unshift({ go: p, side: true }); break; } }
+      a.noGain = 0; k.pt = null; if (k.side) { a.tasks.shift(); return; }
+      const r0 = rng() * 8;
+      for (let j = 0; j < 8; j++) { const ang = (r0 + j) * Math.PI / 4, p = { x: a.x + Math.cos(ang) * 4, z: a.z + Math.sin(ang) * 4 };
+        if (zoneOf(p.z) === zoneOf(a.z) && walkH(p.x, p.z) !== null && !COL.some(c => Math.hypot(p.x - c.x, p.z - c.z) < c.r + 0.8)) { a.tasks.unshift({ go: p, side: true }); break; } }
     }
   }
   else if (k.wait !== undefined) { a.moving = false; k.wait -= dt; if (k.wait <= 0) a.tasks.shift(); }
   else { a.tasks.shift(); k.fn(); }
 }
-function waypoint(a, p) { // another era is reached through its time gate, never through the wall
-  const za = zoneOf(a.z), zp = zoneOf(p.z); if (za === zp) return p;
-  const north = zp > za, gz = GATE_Z[north ? za : za - 1], s = north ? 1 : -1;
-  return Math.abs(a.x) > 1.2 && (a.z - gz) * s > 2 ? { x: 0, z: gz + 2.6 * s } : { x: 0, z: gz - 2.6 * s };
+function waypoint(a, p) { // a later island is reached through this island's portal
+  const za = zoneOf(a.z); return zoneOf(p.z) > za && za < 3 && a.stage > za ? PORTAL[za] : p;
+}
+function warpTo(a, e) { // land on island e's arrival ring, a step to the side so friends do not stack
+  const A = ARRIVE[e], ang = rng() * 6.283, r = a.bot ? 1.5 + rng() * 2 : 0; sparkle(a.x, a.h, a.z);
+  a.x = A.x + Math.cos(ang) * r; a.z = A.z + Math.abs(Math.sin(ang)) * r * 0.6; a.h = gh(a.x, a.z); sparkle(a.x, a.h, a.z);
+}
+function warpBot(a) { warpTo(a, zoneOf(a.z) + 1); a.tasks.forEach(t => { t.pt = null; }); }
+function sparkle(x, y, z) { // a little burst of stars where someone leaves or lands
+  for (let i = 0; i < 8; i++) { const st = mesh(starGeo(0.18, 0.05), glow([0xffe680, 0xffc2e2, 0xbfe9ff][i % 3]), x, y + 1, z); dyn.add(st); state.sparks.push({ m: st, t: 0, vx: Math.cos(i * 0.785) * 2.4, vz: Math.sin(i * 0.785) * 2.4 }); }
 }
 function liftOff(a) {
   a.launched = true; a.mesh.visible = false; a.tag.style.transform = 'translate(-999px,0)'; a.proj.visible = false;
   const r = makeRocket(a.shirt); Object.values(r.userData.parts).forEach(p => { p.visible = true; }); ['oven', 'food', 'scan'].forEach(k => { r.userData.parts[k].visible = false; }); r.userData.ghost.visible = false;
-  r.position.set(PLACES.launch.x, 0.4, PLACES.launch.z);
+  r.position.set(PLACES.launch.x, 0.4 + gh(PLACES.launch.x, PLACES.launch.z), PLACES.launch.z);
   const fl = mesh(geo('flame', () => new THREE.ConeGeometry(0.6, 2.2, 12)), glow(0xffb347), 0, -0.9, 0); fl.rotation.x = Math.PI; r.add(fl); dyn.add(r);
   state.fx.push({ r, fl, t: 0 }); state.fame.push(a.name); state.hud = '';
   if (a.bot) toast(`${a.name} 발사! (${state.fame.length}번째)`); sfx('launch'); events.push('launch:' + a.name);
@@ -316,11 +339,9 @@ function planForm() {
   };
 }
 const FIELD_CSS = 'width:100%;box-sizing:border-box;font:inherit;font-size:18px;padding:8px 12px;border-radius:14px;border:3px solid #e6dcc4;margin-top:6px;-webkit-user-select:text;user-select:text';
-function testHtml(d, e) {
-  return (d.img ? `<img src="${d.img}" style="width:100%;border-radius:16px;display:block">` : '') + `<dl style="font-size:18px;margin:8px 0">` + ERAS[e].test.fields.map(p => `<dt style="color:#8a7fa8;font-size:15px">${p.label}</dt><dd style="margin:0 0 6px">${esc(d[p.key] || '')}</dd>`).join('') + '</dl>';
-}
+function testHtml(d) { return (d.img ? `<img src="${d.img}" style="width:100%;border-radius:16px;display:block">` : '') + `<div style="font-size:20px;margin:8px 0">제목: <b>${esc(d.title || '')}</b></div>`; }
 function teacherReview(e) { // the teacher, at the student's tablet: needs the teacher's PIN
-  const m = me(), html = e === 3 ? planHtml(state.plan, m.mission.name) : testHtml(state.tests[e], e);
+  const m = me(), html = e === 3 ? planHtml(state.plan, m.mission.name) : testHtml(state.tests[e]);
   ask('선생님 확인 · ' + (e === 3 ? '탐사 계획서' : ERAS[e].test.title), html + `<input id="tpin" type="password" inputmode="numeric" autocomplete="off" placeholder="선생님 암호" style="${FIELD_CSS}"><input id="tnote" placeholder="학생에게 한마디 (돌려보낼 때)" style="${FIELD_CSS}">`, [
     { label: 'OK 도장 찍기', fn: c => decide(e, 'ok', c) },
     { label: '돌려보내기', fn: c => decide(e, 'back', c) }, { label: '닫기' }], null, true);
@@ -334,46 +355,47 @@ function chiefTalk(e) { // the gatekeeper of each early era: the story, then the
   if (m.stage > e) return say(E.chief, ['너는 벌써 이 시대를 지나갔지! 아직 여기 있는 친구들을 응원해 줘.']);
   if (!state.met[e]) { state.met[e] = true; return say(E.chief, E.intro); }
   if (m.carry) return say(E.chief, ['손에 든 그거, 네 것 아니지? 그것부터 어떻게 해!']);
-  if (m.testStatus === 'sent') return ask(E.chief, '시험지는 선생님께 갔어. 선생님 OK가 나면 시간의 문이 열려!', [{ label: '선생님께 보여 드리기', sub: '선생님 암호가 필요해', fn: () => teacherReview(e) }, { label: '고쳐서 다시 내기', fn: () => testForm(e) }, { label: '기다릴게' }]);
+  if (m.testStatus === 'sent') return ask(E.chief, '그림은 선생님께 갔어. 선생님 OK가 나면 언덕 위 포탈이 열려!', [{ label: '선생님께 보여 드리기', sub: '선생님 암호가 필요해', fn: () => teacherReview(e) }, { label: '고쳐서 다시 내기', fn: () => testForm(e) }, { label: '기다릴게' }]);
   const miss = eraMissing(m);
   if (miss.length) return say(E.chief, [`아직이야! 남은 것: ${miss.join(', ')}`, '가게에서 재료를 받아 네 자리에서 만들어 와.']);
   testForm(e);
 }
-function caveWall(c, img) { // the cave wall to draw on: brown rock, or the drawing kept so far
-  const x = c.getContext('2d'); let s = 5; const r = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
-  x.fillStyle = '#6b5444'; x.fillRect(0, 0, c.width, c.height);
-  for (let i = 0; i < 40; i++) { x.fillStyle = `rgba(${r() > 0.5 ? '255,235,200' : '40,25,20'},0.08)`; x.beginPath(); x.ellipse(r() * c.width, r() * c.height, 20 + r() * 60, 10 + r() * 30, r() * 3, 0, 6.3); x.fill(); }
+const PAPER = { cave: { bg: '#6b5444', blot: ['255,235,200', '40,25,20'], pens: ['#fff6e0', '#ffd166', '#ff8a5c', '#d9534f'] },
+  hanji: { bg: '#f3ead6', blot: ['255,255,255', '160,130,90'], pens: ['#3a2f45', '#d9534f', '#3f7f5f', '#5b7fd6'] },
+  blueprint: { bg: '#3d6fb8', blot: ['255,255,255', '20,40,90'], pens: ['#ffffff', '#ffd166', '#bfe9ff', '#ff8a5c'], grid: true } };
+function paper(c, kind, img) { // what you draw on: a cave wall, hanji, or a blueprint, with the drawing kept so far
+  const P = PAPER[kind], x = c.getContext('2d'); let s = 5; const r = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+  x.fillStyle = P.bg; x.fillRect(0, 0, c.width, c.height);
+  for (let i = 0; i < 40; i++) { x.fillStyle = `rgba(${P.blot[r() > 0.5 ? 0 : 1]},0.08)`; x.beginPath(); x.ellipse(r() * c.width, r() * c.height, 20 + r() * 60, 10 + r() * 30, r() * 3, 0, 6.3); x.fill(); }
+  if (P.grid) { x.strokeStyle = 'rgba(255,255,255,.18)'; x.lineWidth = 1; for (let g = 0; g < c.width; g += 32) { x.beginPath(); x.moveTo(g, 0); x.lineTo(g, c.height); x.stroke(); } for (let g = 0; g < c.height; g += 32) { x.beginPath(); x.moveTo(0, g); x.lineTo(c.width, g); x.stroke(); } }
   if (img) { const im = new Image(); im.onload = () => x.drawImage(im, 0, 0, c.width, c.height); im.src = img; }
 }
-function testForm(e) {
-  const m = me(), T = ERAS[e].test, d = state.tests[e] || (state.tests[e] = {});
+function testForm(e) { // the early eras end in a drawing and its title; the teacher looks and says OK
+  const m = me(), T = ERAS[e].test, d = state.tests[e] || (state.tests[e] = {}), pens = PAPER[T.paper].pens;
   openUI({ kind: 'plan', mid: true });
-  const pens = ['#fff6e0', '#ffd166', '#ff8a5c', '#d9534f'];
   $('modal').innerHTML = `<div class="bubble form"><div class="who">${T.title}</div><div style="font-size:19px">${esc(ERAS[e].chief)}: ${T.ask}</div>` +
     (m.testStatus === 'back' && state.testNote ? `<div class="note">선생님 한마디: ${esc(state.testNote)}</div>` : '') +
-    (T.draw ? `<canvas id="cave" width="640" height="300" style="width:100%;border-radius:18px;margin-top:8px;touch-action:none;display:block"></canvas><div class="opts" style="margin-top:8px">` + pens.map((p, i) => `<button class="opt pen" data-c="${p}" style="background:${p};width:44px;height:44px;padding:0;border-radius:50%;${i ? '' : 'outline:4px solid #4a3d6b'}"></button>`).join('') + '<button class="opt" id="cClear">다 지우기</button></div>' : '') +
-    T.fields.map(p => `<label>${p.label}</label>` + (p.short ? `<input id="t_${p.key}" maxlength="24" placeholder="${p.ph}">` : `<textarea id="t_${p.key}" maxlength="300" placeholder="${p.ph}"></textarea>`)).join('') +
-    '<div class="opts"><button class="opt" id="pSend" style="background:var(--sun)">선생님께 제출하기</button><button class="opt" id="pLater">나중에 할게</button></div></div>';
-  T.fields.forEach(p => { $('t_' + p.key).value = d[p.key] || ''; });
+    '<canvas id="cave" width="640" height="300" style="width:100%;border-radius:18px;margin-top:8px;touch-action:none;display:block"></canvas><div class="opts" style="margin-top:8px">' +
+    pens.map((p, i) => `<button class="opt pen" data-c="${p}" style="background:${p};width:44px;height:44px;padding:0;border-radius:50%;${i ? '' : 'outline:4px solid #4a3d6b'}"></button>`).join('') +
+    '<button class="opt" id="cClear">다 지우기</button></div><label>그림 제목</label><input id="t_title" maxlength="24" placeholder="예: 보름달 뜬 사냥 밤">' +
+    '<div class="opts"><button class="opt" id="pSend" style="background:var(--sun)">선생님께 보여 드리기</button><button class="opt" id="pLater">나중에 할게</button></div></div>';
+  $('t_title').value = d.title || '';
   let drawn = !!d.img;
-  if (T.draw) {
-    const c = $('cave'), x = c.getContext('2d'); let pen = pens[0], last = null; caveWall(c, d.img);
-    const at = ev => { const b = c.getBoundingClientRect(); return [(ev.clientX - b.left) * c.width / b.width, (ev.clientY - b.top) * c.height / b.height]; };
-    c.onpointerdown = ev => { c.setPointerCapture(ev.pointerId); last = at(ev); x.fillStyle = pen; x.beginPath(); x.arc(last[0], last[1], 4, 0, 6.3); x.fill(); drawn = true; };
-    c.onpointermove = ev => { if (!last) return; const p = at(ev); x.strokeStyle = pen; x.lineWidth = 8; x.lineCap = 'round'; x.beginPath(); x.moveTo(last[0], last[1]); x.lineTo(p[0], p[1]); x.stroke(); last = p; };
-    c.onpointerup = c.onpointercancel = () => { last = null; };
-    $('modal').querySelectorAll('.pen').forEach(b => { b.onclick = () => { pen = b.dataset.c; $('modal').querySelectorAll('.pen').forEach(o => { o.style.outline = o === b ? '4px solid #4a3d6b' : ''; }); }; });
-    $('cClear').onclick = () => { caveWall(c); drawn = false; };
-  }
-  const read = () => { T.fields.forEach(p => { d[p.key] = $('t_' + p.key).value.trim(); }); if (T.draw && drawn) d.img = $('cave').toDataURL('image/jpeg', 0.6); if (T.draw && !drawn) d.img = ''; };
+  const c = $('cave'), x = c.getContext('2d'); let pen = pens[0], last = null; paper(c, T.paper, d.img);
+  const at = ev => { const b = c.getBoundingClientRect(); return [(ev.clientX - b.left) * c.width / b.width, (ev.clientY - b.top) * c.height / b.height]; };
+  c.onpointerdown = ev => { c.setPointerCapture(ev.pointerId); last = at(ev); x.fillStyle = pen; x.beginPath(); x.arc(last[0], last[1], 4, 0, 6.3); x.fill(); drawn = true; };
+  c.onpointermove = ev => { if (!last) return; const p = at(ev); x.strokeStyle = pen; x.lineWidth = 8; x.lineCap = 'round'; x.beginPath(); x.moveTo(last[0], last[1]); x.lineTo(p[0], p[1]); x.stroke(); last = p; };
+  c.onpointerup = c.onpointercancel = () => { last = null; };
+  $('modal').querySelectorAll('.pen').forEach(b => { b.onclick = () => { pen = b.dataset.c; $('modal').querySelectorAll('.pen').forEach(o => { o.style.outline = o === b ? '4px solid #4a3d6b' : ''; }); }; });
+  $('cClear').onclick = () => { paper(c, T.paper); drawn = false; };
+  const read = () => { d.title = $('t_title').value.trim(); d.img = drawn ? c.toDataURL('image/jpeg', 0.6) : ''; };
   $('pLater').onclick = () => { read(); closeUI(); };
   $('pSend').onclick = () => {
-    read(); let ok = true;
-    T.fields.forEach(p => { const bad = d[p.key].length < (p.short ? 1 : tune.plan_min_chars); $('t_' + p.key).classList.toggle('bad', bad); if (bad) ok = false; });
-    if (T.draw && !drawn) { ok = false; toast('동굴 벽에 그림을 그려 줘!', 'bad'); }
-    if (!ok) { sfx('bad'); toast(`빈칸을 채워 줘 (칸마다 ${tune.plan_min_chars}자 이상)`, 'bad'); return; }
+    read();
+    if (!drawn) { sfx('bad'); toast('먼저 그림을 그려 줘!', 'bad'); return; }
+    if (!d.title) { sfx('bad'); $('t_title').classList.add('bad'); toast('그림 제목을 붙여 줘!', 'bad'); return; }
     m.testStatus = 'sent'; state.testNote = ''; pushReq(m, e); closeUI(); sfx('pop'); events.push('test-sent:' + e);
-    say(ERAS[e].chief, ['시험지 접수! 선생님께 보냈어.', '선생님 OK를 기다리는 동안 친구를 도와도 되고… 살짝 장난을 쳐도 돼. 쉿!']);
+    say(ERAS[e].chief, ['멋진 그림이야! 선생님께 보냈어.', '선생님 OK를 기다리는 동안 친구를 도와도 되고… 살짝 장난을 쳐도 돼. 쉿!']);
   };
 }
 function keeperTalk(k) {
@@ -469,10 +491,11 @@ function quest() {
   if (state.launching) return { text: '발사!!' };
   if (m.carry) return { text: '들고 튀어! 멀리 가서 바닥이나 보물상자에 숨기자' };
   const E = ER(m), C = m.stage < 3 ? CHIEF_SPOT(m.stage) : null;
+  const here = zoneOf(m.z); if (here < m.stage && here < 3) return Object.assign({ text: `선생님 OK! 언덕 위 시간의 포탈로 들어가 ${ERAS[here + 1].name}로 가자` }, PORTAL[here]);
   if (C) {
     if (!state.met[m.stage]) return Object.assign({ text: `${E.name}에 왔다! ${E.chief}에게 인사하자` }, C);
     if (m.testStatus === 'sent') return Object.assign({ text: `선생님 OK를 기다리는 중… ${E.chief}에게 가면 선생님께 보여 드릴 수 있어` }, C);
-    if (m.testStatus === 'back') return Object.assign({ text: `시험지가 돌아왔어! ${E.chief}에게 가서 고쳐 내자` }, C);
+    if (m.testStatus === 'back') return Object.assign({ text: `그림이 돌아왔어! ${E.chief}에게 가서 다시 그려 보자` }, C);
   } else {
     if (!m.mission) return Object.assign({ text: '우주 시대 도착! 광장의 뽑기 기계에서 임무 카드를 뽑자' }, PLACES.gacha);
     if (m.planStatus === 'none') return Object.assign({ text: '본부 책상에서 탐사 계획서를 쓰자' }, PLACES.desk);
@@ -502,16 +525,33 @@ function setScene(s) {
 }
 function start() { reset(); setScene('play'); sfx('ok'); }
 function setZoom(dir) { zoom = Math.max(tune.zoom_min, Math.min(tune.zoom_max, zoom * Math.pow(tune.zoom_step, dir))); if (Math.abs(zoom - 1) < 0.12) zoom = 1; }
+const SKIES = [[0xf5c79a, 0xf6d3b0], [0xa9dcf2, 0xc9e8f2], [0x9fbbe0, 0xbccbe2], [0x2e2559, 0x6c5fa8]]; // dusk, spring sky, hazy sky, space
+function showIsland(e) { // only one island is drawn at a time; each has its own sky
+  if (W3.shown === e) return; W3.shown = e; W3.stages.forEach((g, i) => { g.visible = i === e; });
+  W3.scene.background.setHex(SKIES[e][0]); W3.scene.fog.color.setHex(SKIES[e][1]); W3.sky.visible = e === 3;
+}
 function view(x, z, up = 0, back = 0) { // the camera at the current zoom; far out, the ground flattens into a map
+  showIsland(zoneOf(z));
   const Z = zoomNow; lookAtSpot(x, z, tune.cam_height * Z + up, tune.cam_back * Math.pow(Z, 0.8) + back);
   BEND.uCurve.value = tune.curve / (Z * Z); W3.scene.fog.near = 48 * Z; W3.scene.fog.far = 110 * Z;
 }
 function playStep(dt) {
   const m = me(); state.t += dt;
   if (Math.floor(state.t * 2) !== Math.floor((state.t - dt) * 2)) pollReq();
-  const zn = zoneOf(m.z); if (zn > state.seenEra && !m.launched) { state.seenEra = zn; eraBanner(zn); }
+  music(zoneOf(W3.focus.z));
+  const zn = zoneOf(m.z); if (zn > state.seenEra && !m.launched && !state.warp) { state.seenEra = zn; eraBanner(zn); }
+  if (state.warp) { // spin, flash white, land on the next island, fade back in
+    const w = state.warp; w.t += dt; m.moving = false; m.mesh.rotation.y += dt * 14; m.mesh.scale.setScalar(Math.max(0.05, w.t < 0.7 ? 1 - w.t / 0.7 : (w.t - 0.7) / 0.7));
+    if (!w.done && w.t >= 0.7) { w.done = true; warpTo(m, w.to); lookAtSpot(m.x, m.z, tune.cam_height * zoomNow, tune.cam_back * Math.pow(zoomNow, 0.8), true); }
+    $('warp').style.opacity = w.t < 0.7 ? w.t / 0.7 : Math.max(0, 1 - (w.t - 0.7) / 0.7);
+    if (w.t >= 1.4) { state.warp = null; m.mesh.scale.setScalar(1); $('warp').style.opacity = 0; }
+  } else if (zn < 3 && !state.ui && !m.launched) {
+    const d = dist(m, PORTAL[zn]);
+    if (m.stage > zn && d < 1.4) { state.warp = { t: 0, to: zn + 1 }; state.near = null; sfx('warp'); events.push('warp:' + (zn + 1)); }
+    else if (m.stage <= zn && d < 3.4 && state.t > (state.lockMsg || 0)) { state.lockMsg = state.t + 8; toast(`포탈이 잠겨 있어. ${ERAS[zn].chief}의 시험에 선생님 OK를 받으면 열려!`); }
+  }
   if (state.ui) uiStep(dt);
-  else if (state.launching) { /* watching the rocket */ }
+  else if (state.launching || state.warp) { /* watching the rocket, or flying through a portal */ }
   else if (state.act) {
     const a = state.act; a.t += dt; m.moving = false;
     if (a.t >= a.dur) {
@@ -529,23 +569,24 @@ function playStep(dt) {
     if (pressed('Equal') || pressed('NumpadAdd')) setZoom(-1); if (pressed('Minus') || pressed('NumpadSubtract')) setZoom(1);
     if (pressed('KeyP') || pressed('Escape')) { setScene('pause'); return; }
   }
-  if (state.ui || state.act || state.launching) { m.moving = false; state.near = null; }
+  if (state.ui || state.act || state.launching || state.warp) { m.moving = false; state.near = null; }
   if (!state.staged && state.t >= tune.staged_prank_at && state.actors.length > 2) { // the first minute: a friend runs off with a friend's hull
     state.staged = true; const th = state.actors[2], v = state.actors[1], pid = v.order[v.order.length - 1];
     if (pid && !canPrank(Object.assign({}, th, { prankReady: 0 }), v, 'hide')) { th.prankReady = 0; th.tasks.length = 0; planPrank(th, v, { x: PLACES.spawn.x - 1.5, z: PLACES.spawn.z - 3 }); th.tasks.push(act(() => toast(`어? ${josa(th.name, '이', '가')} ${v.name}의 ${josa(PART[pid].name, '을', '를')} 들고 튄다!`))); const t0 = th.tasks.pop(); th.tasks.splice(1, 0, t0); }
   }
   state.actors.forEach(a => { if (a.bot) botStep(a, dt); });
-  const near = 45 * zoomNow + 25; // far eras are not drawn: 30 kids, 30 work spots and four villages are a lot for a tablet
-  W3.zoned.forEach(o => { o.visible = Math.abs(o.position.z - W3.focus.z) < near + 12; });
-  keepers.forEach(k => { k.mesh.visible = Math.abs(k.z - W3.focus.z) < near; }); state.chests.forEach(c => { c.g.visible = Math.abs(c.z - W3.focus.z) < near; });
+  const fz = zoneOf(W3.focus.z); // only the island the camera is on is drawn
+
+  keepers.forEach(k => { k.mesh.visible = zoneOf(k.z) === fz; }); state.chests.forEach(c => { c.g.visible = zoneOf(c.z) === fz; });
   state.actors.forEach(a => {
     if (a.launched) return;
-    a.mesh.visible = Math.abs(a.z - W3.focus.z) < near; a.proj.visible = a.padG.visible = Math.abs(a.pad.z - W3.focus.z) < near;
-    a.mesh.position.set(a.x, 0, a.z); a.mesh.rotation.y = a.face; if (a.mesh.visible) animateKid(a.mesh, a.moving, dt, state.t);
+    a.mesh.visible = zoneOf(a.z) === fz; a.proj.visible = a.padG.visible = zoneOf(a.pad.z) === fz;
+    a.mesh.position.set(a.x, a.h, a.z); a.mesh.rotation.y = a.face; if (a.mesh.visible) animateKid(a.mesh, a.moving, dt, state.t);
     const u = a.proj.userData; u.tilt.rotation.z = a.loose && a.stage === 3 ? 0.2 + Math.sin(state.t * 5 + a.i) * 0.04 : 0;
   });
   W3.anim.forEach(f => f(state.t));
-  W3.gates.forEach((g, e) => { const open = m.stage > e, u = g.userData; u.lock.visible = !open; u.curtain.material.color.setHex(open ? 0xffe680 : 0xff8fc8); u.curtain.material.opacity = open ? 0.16 + Math.sin(state.t * 3) * 0.06 : 0.5; });
+  W3.portals.forEach((g, e) => { const open = m.stage > e, u = g.userData; u.lock.visible = !open; u.swirl.rotation.z -= dt * (open ? 3 : 0.3); u.swirl.material.color.setHex(open ? 0xffffff : 0x8f86a8); });
+  state.sparks = state.sparks.filter(p => { p.t += dt; p.m.position.x += p.vx * dt; p.m.position.z += p.vz * dt; p.m.position.y += dt * 2; p.m.rotation.y += dt * 6; p.m.scale.setScalar(Math.max(0.01, 1 - p.t)); if (p.t > 1) dyn.remove(p.m); return p.t <= 1; });
   state.hidden.forEach(h => { if (h.st) { h.st.rotation.y += dt * 3; h.st.position.y = 1.5 + Math.sin(state.t * 4) * 0.15; } });
   state.chests.forEach(c => { if (c.items) { const u = c.g.userData; u.lid.rotation.x = -0.3 - Math.abs(Math.sin(state.t * 5)) * 0.25; u.spark.rotation.y = state.t * 3; } });
   zoomNow += (zoom - zoomNow) * 0.15;
@@ -555,7 +596,7 @@ function playStep(dt) {
   W3.twinkles.forEach(s => { s.scale.setScalar(0.75 + Math.sin(state.t * 3 + s.userData.k) * 0.3); s.rotation.y = state.t + s.userData.k; });
   W3.planet.position.x = 150 - (state.t * 1.2) % 300; W3.planet.rotation.y = state.t * 0.05;
   const q = quest(); state.questText = q.text;
-  marker.visible = q.x !== undefined; if (marker.visible) { marker.position.set(q.x, 4.6 + zoomNow + Math.sin(state.t * 4) * 0.25, q.z); marker.rotation.y = state.t * 2.5; marker.scale.setScalar(1 + (zoomNow - 1) * 0.5); }
+  marker.visible = q.x !== undefined && zoneOf(q.z) === zoneOf(m.z); if (marker.visible) { marker.position.set(q.x, gh(q.x, q.z) + 4.6 + zoomNow + Math.sin(state.t * 4) * 0.25, q.z); marker.rotation.y = state.t * 2.5; marker.scale.setScalar(1 + (zoomNow - 1) * 0.5); }
   if (state.launching) {
     const L = state.launching; L.t += dt; zoom = 1; view(PLACES.launch.x, PLACES.launch.z + 5, L.t * 0.8, 3);
     if (L.t > 5) finish();
@@ -577,13 +618,14 @@ function drawWorld() {
   const m = me(), play = scene === 'play' || scene === 'pause', list = [], taken = [], off = el => { el.style.transform = 'translate(-999px,0)'; };
   if (play) ['parts', 'questbox', 'top', 'bag', 'act', 'zoomer', 'stickBase'].forEach(id => { const b = $(id).getBoundingClientRect(); if (b.width) taken.push([b.left - 6, b.top - 6, b.right + 6, b.bottom + 6]); });
   const n = state.near, pr = $('prompt');
-  if (n && scene === 'play') { pr.textContent = n.label; const p = toScreen(n.x, n.y, n.z), w = pr.offsetWidth; pr.style.transform = `translate(${Math.round(p.x)}px,${Math.round(p.y)}px) translate(-50%,-100%)`; taken.push([p.x - w / 2 - 4, p.y - 40, p.x + w / 2 + 4, p.y + 2]); } else off(pr);
+  if (n && scene === 'play') { pr.textContent = n.label; const p = toScreen(n.x, n.y + gh(n.x, n.z), n.z), w = pr.offsetWidth; pr.style.transform = `translate(${Math.round(p.x)}px,${Math.round(p.y)}px) translate(-50%,-100%)`; taken.push([p.x - w / 2 - 4, p.y - 40, p.x + w / 2 + 4, p.y + 2]); } else off(pr);
   const put = (el, x, y, z, pri) => list.push({ el, x, y, z, pri }), close = zoomNow < 1.9;
-  if (!m.launched) put(m.tag, m.x, 2.75 * Math.max(1, zoomNow * 0.35), m.z, 0);
+  if (!m.launched && !state.warp) put(m.tag, m.x, m.h + 2.75 * Math.max(1, zoomNow * 0.35), m.z, 0); else off(m.tag);
   const seen = 38 * zoomNow + 14; // names beyond the fog are not shown
-  places.forEach(p => { if (Math.abs(p.z - W3.focus.z) < seen) put(p.tag, p.x, p.y, p.z, p.mine ? 1 : 2); else off(p.tag); });
-  keepers.forEach(k => { if (close && dist(m, k) < 13) put(k.tag, k.x, k.y, k.z, 3); else off(k.tag); });
-  state.actors.forEach(a => { if (!a.bot) return; const d = dist(m, a); if (!a.launched && close && d < 15) put(a.tag, a.x, 2.75, a.z, 4 + d); else off(a.tag); });
+  const fz = zoneOf(W3.focus.z);
+  places.forEach(p => { if (zoneOf(p.z) === fz && Math.abs(p.z - W3.focus.z) < seen) put(p.tag, p.x, p.y + gh(p.x, p.z), p.z, p.mine ? 1 : 2); else off(p.tag); });
+  keepers.forEach(k => { if (close && zoneOf(k.z) === fz && dist(m, k) < 13) put(k.tag, k.x, k.y + gh(k.x, k.z), k.z, 3); else off(k.tag); });
+  state.actors.forEach(a => { if (!a.bot) return; const d = dist(m, a); if (!a.launched && close && zoneOf(a.z) === fz && d < 15) put(a.tag, a.x, a.h + 2.75, a.z, 4 + d); else off(a.tag); });
   list.sort((a, b) => a.pri - b.pri).forEach(o => {
     const p = toScreen(o.x, o.y, o.z), w = o.el._w, tries = o.pri <= 2 ? 3 : 1; if (!p.on) return off(o.el);
     let y = p.y, r = null;
@@ -608,9 +650,9 @@ function drawHud() {
   $('toasts').innerHTML = state.toasts.slice(-3).map(t => `<div class="toast ${t.kind}">${esc(t.msg)}</div>`).join('');
 }
 const scenes = {
-  figures: { update(dt) { state.t += dt; }, draw() { W3.cam.position.set(0, 5, 326); W3.cam.lookAt(0, 1.7, 300); BEND.uCamZ.value = 250; W3.r.render(W3.scene, W3.cam); lineup.forEach((f, i) => { const p = toScreen(f.x, -0.25 - (i % 2) * 0.75, 300); f.tag.style.transform = `translate(${Math.round(p.x)}px,${Math.round(p.y)}px) translate(-50%,0)`; }); } },
+  figures: { update(dt) { state.t += dt; }, draw() { showIsland(3); W3.stages[3].visible = false; W3.cam.position.set(0, 5, -374); W3.cam.lookAt(0, 1.7, -400); BEND.uCamZ.value = -450; W3.r.render(W3.scene, W3.cam); lineup.forEach((f, i) => { const p = toScreen(f.x, -0.25 - (i % 2) * 0.75, -400); f.tag.style.transform = `translate(${Math.round(p.x)}px,${Math.round(p.y)}px) translate(-50%,0)`; }); } },
   title: {
-    update(dt) { state.t += dt; W3.planet.position.x = 150 - (state.t * 1.2) % 300; W3.anim.forEach(f => f(state.t)); state.actors.forEach(a => { a.mesh.position.set(a.x, 0, a.z); animateKid(a.mesh, false, dt, state.t); }); zoomNow = 1; view(PLACES.spawn.x, PLACES.spawn.z - 3); if (pressed('Enter') || pressed('Space')) start(); },
+    update(dt) { state.t += dt; W3.planet.position.x = 150 - (state.t * 1.2) % 300; W3.anim.forEach(f => f(state.t)); state.actors.forEach(a => { a.mesh.position.set(a.x, a.h, a.z); a.mesh.visible = zoneOf(a.z) === 0; animateKid(a.mesh, false, dt, state.t); }); zoomNow = 1; view(PLACES.spawn.x, PLACES.spawn.z - 3); if (pressed('Enter') || pressed('Space')) start(); },
     draw() { drawWorld(); },
   },
   play: { update: playStep, draw() { drawWorld(); drawHud(); } },
@@ -621,8 +663,8 @@ const scenes = {
 // ---- The figures sheet: every kind of figure side by side, named ---------------------------------
 function buildLineup() {
   if (lineup) return; lineup = []; closeUI(true);
-  const floor = mesh(cyl(22, 22, 0.2, 48), mat(0x9fe6c3), 0, -0.1, 300); dyn.add(floor);
-  const add = (m, name) => { const x = (lineup.length - 6) * 2.25; m.position.set(x, 0, 300); dyn.add(m); lineup.push({ x, tag: tag(name, 'npc') }); };
+  const floor = mesh(cyl(22, 22, 0.2, 48), mat(0x9fe6c3), 0, -0.1, -400); dyn.add(floor);
+  const add = (m, name) => { const x = (lineup.length - 6) * 2.25; m.position.set(x, 0, -400); dyn.add(m); lineup.push({ x, tag: tag(name, 'npc') }); };
   ['학생: 앞머리', '학생: 뾰족머리', '학생: 동글머리', '학생: 묶음머리', '학생: 모자'].forEach((n, i) => add(makeKid({ shirt: SHIRTS[i], hair: i, hairColor: HAIR[i] }), n));
   const s = makeKid({ shirt: SHIRTS[6], hair: 0, hairColor: HAIR[1] }); dressKid(s, { suit: 1, outer: 1, helmet: 1 }); add(s, '우주복 학생');
   SHOPS.forEach((sh, i) => add(sh.era === 3 ? makeKeeper(sh.id) : makeVillager(sh.era, i), sh.keeper)); add(makeKeeper('guide'), GUIDE);
@@ -645,13 +687,13 @@ function icon(c, id) {
   if (id === 'food') { R(16, 12, 36, 46, 8, '#ffd166'); L(16, 22, 52, 22); O(34, 40, 8, '#ff8fa3'); }
   if (id === 'st_fire') { L(14, 58, 54, 46); L(14, 46, 54, 58); c.beginPath(); c.moveTo(34, 8); c.quadraticCurveTo(52, 30, 44, 46); c.lineTo(24, 46); c.quadraticCurveTo(16, 30, 34, 8); c.fillStyle = '#ffa24a'; c.fill(); c.stroke(); O(34, 36, 6, '#ffe680'); }
   if (id === 'st_axe') { L(22, 60, 40, 14); c.beginPath(); c.moveTo(30, 10); c.lineTo(56, 18); c.lineTo(50, 36); c.lineTo(34, 30); c.closePath(); c.fillStyle = '#b9bccb'; c.fill(); c.stroke(); }
-  if (id === 'st_wall') { R(10, 10, 48, 50, 10, '#d8c8ad'); c.beginPath(); c.arc(26, 28, 9, 0.6, 5.2); c.stroke(); [[44, 22], [40, 40], [22, 48]].forEach(([x, y]) => O(x, y, 3, '#ffd166')); }
+  if (id === 'st_wall') { R(10, 10, 48, 50, 10, '#d8c8ad'); const moon = (cx, cy, R) => { const r = R * 0.9, k = R * 0.47, x = (R * R - r * r + k * k) / (2 * k), y = Math.sqrt(R * R - x * x), t = Math.atan2(y, x), p = Math.atan2(y, x - k); c.beginPath(); c.arc(cx, cy, R, t, 6.283 - t); c.arc(cx + k, cy, r, 6.283 - p, p, true); c.closePath(); c.fillStyle = '#fff6d8'; c.fill(); c.stroke(); }; moon(26, 30, 11); [[45, 20], [42, 40], [24, 50]].forEach(([x, y]) => O(x, y, 3, '#ffd166')); }
   if (id === 'ir_tool') { c.beginPath(); c.arc(30, 30, 18, 3.6, 6.6); c.lineWidth = 7; c.strokeStyle = '#b9c2e6'; c.stroke(); c.lineWidth = 5; c.strokeStyle = '#4a3d6b'; c.beginPath(); c.arc(30, 30, 18, 3.6, 6.6); c.stroke(); L(46, 34, 54, 60); }
   if (id === 'ir_cal') { O(34, 34, 24, '#e2d8c2'); for (let i = 0; i < 12; i++) { const a = i / 12 * 6.28; O(34 + Math.cos(a) * 18, 34 + Math.sin(a) * 18, 2, '#4a3d6b'); } O(34, 34, 7, '#fff1d6'); }
   if (id === 'ir_tower') { c.beginPath(); c.moveTo(18, 60); c.quadraticCurveTo(22, 28, 26, 16); c.lineTo(42, 16); c.quadraticCurveTo(46, 28, 50, 60); c.closePath(); c.fillStyle = '#e2d8c2'; c.fill(); c.stroke(); R(22, 8, 24, 8, 2, '#d0c4aa'); R(30, 32, 8, 8, 2, '#4a3d6b'); }
   if (id === 'in_scope') { L(34, 40, 20, 62); L(34, 40, 48, 62); c.save(); c.translate(34, 30); c.rotate(-0.6); R(-24, -7, 48, 14, 6, '#e0b450'); c.restore(); }
-  if (id === 'in_steam') { for (let i = 0; i < 8; i++) { const a = i / 8 * 6.28; R(34 + Math.cos(a) * 20 - 5, 38 + Math.sin(a) * 20 - 5, 10, 10, 3, '#e0b450'); } O(38 - 4, 38, 16, '#e0b450'); O(34, 38, 6, '#fff'); O(50, 12, 7, '#fff'); }
-  if (id === 'in_rocket') { c.beginPath(); c.moveTo(34, 6); c.quadraticCurveTo(44, 18, 42, 52); c.lineTo(26, 52); c.quadraticCurveTo(24, 18, 34, 6); c.fillStyle = '#fff5e1'; c.fill(); c.stroke(); c.beginPath(); c.moveTo(28, 54); c.lineTo(34, 64); c.lineTo(40, 54); c.fillStyle = '#ff8a5c'; c.fill(); c.stroke(); }
+  if (id === 'in_steam') { R(8, 26, 32, 20, 6, '#5d5a70'); R(38, 14, 22, 32, 4, '#d9534f'); R(14, 10, 8, 16, 2, '#5d5a70'); O(10, 6, 5, '#fff'); [16, 30, 48].forEach(x => O(x, 52, 7, '#e0b450')); R(42, 18, 12, 9, 2, '#bfe9ff'); }
+  if (id === 'in_plane') { R(4, 18, 60, 8, 3, '#ff8a73'); R(4, 40, 60, 8, 3, '#ff8a73'); L(18, 26, 18, 40); L(50, 26, 50, 40); c.beginPath(); c.ellipse(34, 33, 22, 7, 0, 0, 6.3); c.fillStyle = '#fff5e1'; c.fill(); c.stroke(); L(58, 24, 58, 42); O(58, 33, 3, '#ffd166'); R(8, 26, 8, 6, 2, '#ff8a73'); }
   if (id === 'scan') { c.lineWidth = 12; c.strokeStyle = '#f7e08a'; c.beginPath(); c.arc(34, 30, 17, 0, 6.3); c.stroke(); c.lineWidth = 5; c.strokeStyle = '#4a3d6b'; O(34, 30, 23); O(34, 30, 11); R(12, 54, 44, 8, 4, '#fff'); }
 }
 function eraBanner(e) { // a big title when you first step into an era
@@ -698,11 +740,11 @@ function teacherPage() {
     const raw = JSON.stringify(loadPlans()); if (raw === seen || (document.activeElement && document.activeElement.tagName === 'INPUT')) return; seen = raw;
     const all = loadPlans(), word = { sent: '확인 대기', ok: 'OK', back: '돌려보냄', none: '작성 중' };
     const ids = Object.keys(all).filter(id => all[id] && all[id].kind).sort((a, b) => (all[a].status === 'sent' ? 0 : 1) - (all[b].status === 'sent' ? 0 : 1) || all[b].stage - all[a].stage);
-    root.innerHTML = '<h1>우주의 숲 · 선생님 화면</h1><div>석기 · 철기 · 산업 시대의 시험지와 우주 시대 탐사 계획서를 읽고 OK를 눌러 주세요. OK가 나면 학생 앞의 시간의 문이 열립니다. 이 화면은 같은 기기, 같은 브라우저에서 낸 것만 보여 줍니다. 학생 기기에서 바로 OK할 때의 암호는 data.js의 TEACHER_PIN입니다.</div>' +
+    root.innerHTML = '<h1>우주의 숲 · 선생님 화면</h1><div>석기 · 철기 · 산업 시대의 그림과 우주 시대 탐사 계획서를 보고 OK를 눌러 주세요. OK가 나면 학생 섬의 시간의 포탈이 열립니다. 이 화면은 같은 기기, 같은 브라우저에서 낸 것만 보여 줍니다. 학생 기기에서 바로 OK할 때의 암호는 data.js의 TEACHER_PIN입니다.</div>' +
       (ids.length ? '' : '<div class="plan">아직 제출된 시험지나 계획서가 없습니다.</div>') + ids.map(id => { const p = all[id], plan = p.kind === 'plan';
         return `<div class="plan"><h2>${esc(p.name)} · ${ERAS[p.stage].name} ${plan ? '탐사 계획서' : ERAS[p.stage].test.title} <span class="stamp ${p.status}">${word[p.status]}</span></h2>` +
           (plan ? `임무: ${esc(p.mission)} · 우주선: ${esc(p.fields.ship || '')}<dl>` + PLAN_FIELDS.slice(1).map(f => `<dt>${f.label}</dt><dd>${esc(p.fields[f.key] || '')}</dd>`).join('') + '</dl>'
-            : (p.img ? `<img src="${p.img}" style="max-width:480px;width:100%;border-radius:14px;display:block">` : '') + '<dl>' + ERAS[p.stage].test.fields.map(f => `<dt>${f.label}</dt><dd>${esc(p.fields[f.key] || '')}</dd>`).join('') + '</dl>') +
+            : (p.img ? `<img src="${p.img}" style="max-width:480px;width:100%;border-radius:14px;display:block">` : '') + `<div>제목: <b>${esc(p.fields.title || '')}</b></div>`) +
           `<div class="row"><input id="n_${id}" placeholder="학생에게 한마디" value="${esc(p.note || '')}"><button class="btn" data-id="${id}" data-s="ok">OK 도장</button><button class="btn" data-id="${id}" data-s="back">돌려보내기</button></div></div>`; }).join('');
     root.querySelectorAll('button').forEach(b => { b.onclick = () => { setStatus(b.dataset.id, b.dataset.s, $('n_' + b.dataset.id).value.trim()); seen = ''; draw(); }; });
   };

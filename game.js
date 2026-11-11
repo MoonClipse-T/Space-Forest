@@ -47,13 +47,18 @@ function loadPlans() { try { return JSON.parse(localStorage.getItem(KEY)) || {};
 function savePlans(p) { try { localStorage.setItem(KEY, JSON.stringify(p)); } catch (e) { /* no storage: the in-game stamp still works */ } }
 function pushReq(a, e) { // bots are stamped in their own heads; only the player's papers go to the teacher
   if (a.bot) return; const all = loadPlans();
-  all['me:' + e] = e === 3 ? { name: a.name, stage: 3, kind: 'plan', mission: a.mission.name, fields: state.plan, status: a.planStatus, note: state.planNote }
+  const entry = e === 3 ? { name: a.name, stage: 3, kind: 'plan', mission: a.mission.name, fields: state.plan, status: a.planStatus, note: state.planNote }
     : { name: a.name, stage: e, kind: 'test', fields: state.tests[e], img: state.tests[e].img || '', status: a.testStatus, note: state.testNote };
-  savePlans(all);
+  if (MP.on) return MP.net.set('req/' + MP.id, entry);
+  all['me:' + e] = entry; savePlans(all);
 }
-function setStatus(id, status, note) { const all = loadPlans(); if (all[id]) { all[id].status = status; all[id].note = note || ''; savePlans(all); } }
-function pollReq() {
-  const m = me(), e = m.stage, p = loadPlans()['me:' + e]; if (!p) return;
+function setStatus(id, status, note) {
+  if (MP.on) { if (MP.req) MP.net.set('req/' + MP.id, Object.assign({}, MP.req, { status, note: note || '' })); return; }
+  const all = loadPlans(); if (all[id]) { all[id].status = status; all[id].note = note || ''; savePlans(all); }
+}
+function pollReq() { if (!MP.on) applyReq(loadPlans()['me:' + me().stage]); }
+function applyReq(p) { // the teacher said OK, or sent it back
+  const m = me(), e = m.stage; if (!p || p.stage !== e) return;
   if (e === 3) {
     if (m.planStatus !== 'sent') return;
     if (p.status === 'ok') { m.planStatus = 'ok'; toast('계획서 통과! 도장 쾅! 이제 만들러 가자', 'good'); sfx('stamp'); events.push('approved'); }
@@ -69,15 +74,15 @@ function reset() {
   seed = Number(params.get('seed')) || CONFIG.seed;
   if (dyn) W3.scene.remove(dyn);
   dyn = new THREE.Group(); W3.scene.add(dyn); $('tags').innerHTML = ''; lineup = null;
-  closeUI(true); savePlans({});
-  state = { sparks: [], warp: null, t: 0, score: 0, gained: '', actors: [], hidden: [], chests: [], foot: [], fx: [], toasts: [], bag: [], ui: null, act: null, fame: [], plan: {}, planNote: '', tests: {}, testNote: '', met: {}, seenEra: -1, sulk: {}, staged: false, near: null, launching: null, joy: { x: 0, z: 0 }, hud: '', questText: '' };
+  closeUI(true); if (!MP.on) savePlans({});
+  state = { sparks: [], warp: null, tries: {}, t: 0, score: 0, gained: '', actors: [], hidden: [], chests: [], foot: [], fx: [], toasts: [], bag: [], ui: null, act: null, fame: [], plan: {}, planNote: '', tests: {}, testNote: '', met: {}, seenEra: -1, sulk: {}, staged: false, near: null, launching: null, joy: { x: 0, z: 0 }, hud: '', questText: '' };
   COL = [{ x: PLACES.hq.x, z: PLACES.hq.z, r: 4.7 }, { x: PLACES.gacha.x, z: PLACES.gacha.z, r: 1.2 }, { x: PLACES.desk.x, z: PLACES.desk.z, r: 1.4 }, { x: PLACES.desk.x + 2.6, z: PLACES.desk.z + 0.2, r: 0.7 }];
   SHOPS.forEach(s => { COL.push({ x: s.x, z: s.z, r: 3.7 }); const k = keeperSpot(s); COL.push({ x: k.x, z: k.z, r: 0.75 }); });
   W3.solids.forEach(c => COL.push(c)); // houses, trees, landmarks on the islands
   PORTAL.forEach((p, e) => COL.push({ x: p.x, z: p.z, r: 1.7, portal: true, era: e })); // a shut portal is a wall; an open one you walk into
 
   keepers = SHOPS.map((s, i) => { const k = keeperSpot(s), m = s.era === 3 ? makeKeeper(s.id) : makeVillager(s.era, i); m.position.set(k.x, gh(k.x, k.z), k.z); m.rotation.y = s.x < 0 ? 0.5 : -0.5; dyn.add(m); return { id: s.id, name: s.keeper, x: k.x, z: k.z, y: s.era === 3 ? 3.1 : 3.3, mesh: m, tag: tag(s.keeper, 'npc') }; });
-  ERA_Z.forEach((zc, e) => { const c = CHIEF_SPOT(e), m = makeVillager(e, 3); m.scale.setScalar(1.4); m.position.set(c.x, gh(c.x, c.z), c.z); dyn.add(m); COL.push({ x: c.x, z: c.z, r: 0.8 }); keepers.push({ id: 'chief', era: e, name: ERAS[e].chief, x: c.x, z: c.z, y: 3.8, mesh: m, tag: tag(ERAS[e].chief + ' (문지기)', 'npc') }); });
+  ERA_Z.forEach((zc, e) => { const c = CHIEF_SPOT(e), m = makeVillager(e, 3, e === 1); m.scale.setScalar(1.4); m.position.set(c.x, gh(c.x, c.z), c.z); dyn.add(m); COL.push({ x: c.x, z: c.z, r: 0.8 }); keepers.push({ id: 'chief', era: e, name: ERAS[e].chief, x: c.x, z: c.z, y: 3.8, mesh: m, tag: tag(ERAS[e].chief + ' (문지기)', 'npc') }); });
   const g = makeKeeper('guide'); g.position.set(PLACES.desk.x + 2.6, 0, PLACES.desk.z + 0.2); dyn.add(g);
   keepers.push({ id: 'guide', name: GUIDE, x: g.position.x, z: g.position.z, y: 2.8, mesh: g, tag: tag(GUIDE, 'npc') });
   places = SHOPS.map(s => ({ x: s.x, y: 4.6, z: s.z + 2.8, tag: tag(s.name, 'place') }));
@@ -85,13 +90,13 @@ function reset() {
     { x: PLACES.launch.x, y: 3.3, z: PLACES.launch.z, tag: tag('발사대', 'place') }, { x: 0, y: 1.9, z: 0, tag: tag('내 작업장', 'place'), mine: true });
 
   ERAS.forEach((E, e) => HIDE_SPOTS.filter(h => h.era === e).slice(0, tune.chest_count).forEach(h => { const g2 = makeChest(h.x, h.z); g2.position.y = gh(h.x, h.z); dyn.add(g2); state.chests.push({ x: h.x, z: h.z, g: g2, items: 0, era: e }); COL.push({ x: h.x, z: h.z, r: 0.8 }); }));
-  navReset(); const n = 1 + Math.min(tune.bot_count, BOT_NAMES.length, PAD_SPOTS[0].length - 1);
+  navReset(); const n = MP.on ? 1 : 1 + Math.min(tune.bot_count, BOT_NAMES.length, PAD_SPOTS[0].length - 1); // in a class room, the classmates are real
   const myName = ($('nameIn').value.trim() || '나').slice(0, 8);
   for (let i = 0; i < n; i++) {
     const bot = i > 0, si = (myShirt + i) % SHIRTS.length, ang = Math.PI + rng() * Math.PI, rad = 3.5 + rng() * 4;
-    const a = { i, bot, name: bot ? BOT_NAMES[i - 1] : myName, shirt: SHIRTS[si], shirtName: SHIRT_NAMES[si], x: bot ? PLACES.spawn.x + Math.cos(ang) * rad * 1.6 : PLACES.spawn.x, z: bot ? PLACES.spawn.z + Math.sin(ang) * rad : PLACES.spawn.z, face: 0, moving: false,
-      mission: bot ? pick(MISSIONS) : null, stage: 0, testStatus: 'none', eraTime: [], planStatus: 'none', parts: {}, order: [], away: {}, loose: false, doodle: false, shieldUntil: 0, prankReady: bot ? 60 + rng() * 120 : 0, lastVictim: -1, tasks: [], pace: 0.7 + rng() * 0.9, launched: false, carry: null };
-    a.h = gh(a.x, a.z); a.mesh = makeKid({ shirt: a.shirt, hair: i % 5, hairColor: HAIR[(i * 3) % HAIR.length] }); dyn.add(a.mesh);
+    const a = { i: MP.on ? MP.slot : i, id: MP.on ? MP.id : 'a' + i, bot, name: bot ? BOT_NAMES[i - 1] : myName, shirt: SHIRTS[si], shirtName: SHIRT_NAMES[si], x: bot ? PLACES.spawn.x + Math.cos(ang) * rad * 1.6 : PLACES.spawn.x, z: bot ? PLACES.spawn.z + Math.sin(ang) * rad : PLACES.spawn.z, face: 0, moving: false,
+      mission: bot ? pick(MISSIONS) : null, stage: 0, testStatus: 'none', eraTime: [], planStatus: 'none', parts: {}, order: [], away: {}, loose: false, doodle: false, shieldUntil: 0, prankReady: bot ? 60 + rng() * 120 : 0, lastVictim: '', tasks: [], pace: 0.7 + rng() * 0.9, launched: false, carry: null };
+    a.h = gh(a.x, a.z); a.mesh = makeKid({ shirt: a.shirt, hair: a.i % 5, hairColor: HAIR[(a.i * 3) % HAIR.length] }); dyn.add(a.mesh);
     placeWork(a);
     a.tag = tag(a.name, bot ? '' : 'me'); state.actors.push(a);
   }
@@ -112,7 +117,7 @@ function placeWork(a) { // a kid's work spot for the era they are in: it moves n
 }
 function advance(a) { // the teacher said OK: through the time gate to the next era
   a.eraTime[a.stage] = state.t; a.stage++; a.testStatus = 'none'; a.loose = a.doodle = false; a.away = {}; a.order = [];
-  state.hidden.filter(h => h.owner === a.i).forEach(unhide);
+  state.hidden.filter(h => h.owner === a.id).forEach(unhide);
   placeWork(a); refreshActor(a);
   if (!a.bot) { state.bag = []; state.testNote = ''; toast(`선생님 OK! 시간의 문이 열렸다. 북쪽 ${ERAS[a.stage].name}로!`, 'good'); sfx('stamp'); events.push('era:' + a.stage); }
 }
@@ -156,7 +161,7 @@ function canPrank(by, v, kind) {
   if (v.testStatus === 'sent') return '선생님이 시험지를 보는 중이라 건드릴 수 없어';
   if (by.carry) return '손에 든 것부터 숨기자';
   if (state.t < by.prankReady) return `장난 기운 충전 중 (${Math.ceil(by.prankReady - state.t)}초)`;
-  if (by.lastVictim === v.i) return '같은 친구를 연달아 괴롭히면 안 돼';
+  if (by.lastVictim === v.id) return '같은 친구를 연달아 괴롭히면 안 돼';
   if (state.t < v.shieldUntil) return '방금 당한 곳이라 경보가 켜져 있어';
   if (kind === 'hide' && !v.order.length) return '가져갈 물건이 아직 없어';
   const L = ERAS[v.stage].loose, D = ERAS[v.stage].doodle;
@@ -164,31 +169,37 @@ function canPrank(by, v, kind) {
   if (kind === 'doodle' && (v.doodle || !v.parts[D.on])) return v.doodle ? D.already : D.none;
   return '';
 }
-function prank(by, v, kind) {
-  by.prankReady = state.t + tune.prank_cooldown; by.lastVictim = v.i; v.shieldUntil = state.t + tune.pad_shield;
+function footprints(by, v) { // a trail in the prankster's shirt colour, from the victim's work spot towards them
   const s = padStand(v), dx = by.x - v.pad.x, dz = by.z - v.pad.z, l = Math.hypot(dx, dz) || 1;
-  for (let k = 0; k < 6; k++) { // footprints in the prankster's shirt colour
-    const f = mesh(ball(0.16), mat(by.shirt), s.x + dx / l * k * 0.75 + (k % 2 ? 0.18 : -0.18), gh(s.x, s.z) + 0.05, s.z + dz / l * k * 0.75); f.scale.set(0.8, 0.15, 1.3); f.rotation.y = Math.atan2(dx, dz); dyn.add(f); state.foot.push({ m: f, t: 90 });
+  for (let k = 0; k < 6; k++) { const f = mesh(ball(0.16), mat(by.shirt), s.x + dx / l * k * 0.75 + (k % 2 ? 0.18 : -0.18), gh(s.x, s.z) + 0.05, s.z + dz / l * k * 0.75); f.scale.set(0.8, 0.15, 1.3); f.rotation.y = Math.atan2(dx, dz); dyn.add(f); state.foot.push({ m: f, t: 90 }); }
+}
+function prank(by, v, kind) {
+  by.prankReady = state.t + tune.prank_cooldown; by.lastVictim = v.id; v.shieldUntil = state.t + tune.pad_shield; footprints(by, v);
+  if (v.remote) { // a classmate: their tablet applies it; I just run off with the thing
+    const part = kind === 'hide' ? v.order[v.order.length - 1] : '';
+    if (kind === 'hide') { by.carry = { owner: v.id, part }; refreshActor(by); }
+    mpSend(v.id, { k: kind, by: by.id, part }); events.push('prank:' + kind); return;
   }
   let what = '';
   if (kind === 'loose') { v.loose = true; what = ERAS[v.stage].loose.done; }
   if (kind === 'doodle') { v.doodle = true; what = ERAS[v.stage].doodle.done; }
-  if (kind === 'hide') { const id = v.order.pop(); delete v.parts[id]; v.away[id] = true; by.carry = { owner: v.i, part: id }; what = `${josa(PART[id].name, '이', '가')} 사라졌다!`; refreshActor(by); }
+  if (kind === 'hide') { const id = v.order.pop(); delete v.parts[id]; v.away[id] = true; by.carry = { owner: v.id, part: id }; what = `${josa(PART[id].name, '이', '가')} 사라졌다!`; refreshActor(by); }
   refreshActor(v); events.push('prank:' + kind);
   if (v === me()) { toast(`내 ${ERAS[v.stage].work}: ${what} ${by.shirtName}색 발자국이 남았어`, 'bad'); sfx('alarm'); }
 }
 function stash(by, x, z, chest) { // on the ground where it sparkles, or out of sight in a treasure chest
   const c = by.carry; by.carry = null; refreshActor(by);
+  if (MP.on) return MP.net.set('hid/' + by.id + '_' + Date.now().toString(36), { o: c.owner, p: c.part, x: Math.round(x * 10) / 10, z: Math.round(z * 10) / 10, c: chest ? state.chests.indexOf(chest) : -1 });
   if (chest) { chest.items++; state.hidden.push({ owner: c.owner, part: c.part, x: chest.x, z: chest.z, chest }); showChest(chest); }
   else {
     const g = new THREE.Group(); g.position.set(x, gh(x, z), z); const p = partMesh(c.part); p.position.y = 0.4; g.add(p);
     const st = mesh(starGeo(0.22, 0.06), glow(0xfff3a0), 0, 1.5, 0); g.add(st); dyn.add(g);
     state.hidden.push({ owner: c.owner, part: c.part, x, z, g, st });
   }
-  if (c.owner === 0) toast(chest ? `내 ${josa(PART[c.part].name, '이', '가')} 보물상자 어딘가에 숨겨졌어. 뚜껑이 들썩이는 상자를 찾자!` : `내 ${josa(PART[c.part].name, '이', '가')} 어딘가에 숨겨졌어. 반짝이는 곳을 찾자!`, 'bad');
+  if (c.owner === me().id) toast(chest ? `내 ${josa(PART[c.part].name, '이', '가')} 보물상자 어딘가에 숨겨졌어. 뚜껑이 들썩이는 상자를 찾자!` : `내 ${josa(PART[c.part].name, '이', '가')} 어딘가에 숨겨졌어. 반짝이는 곳을 찾자!`, 'bad');
 }
 function showChest(c) { c.g.userData.lid.rotation.x = c.items ? -0.4 : 0; c.g.userData.spark.visible = c.items > 0; }
-function unhide(h) { if (h.g) dyn.remove(h.g); if (h.chest) { h.chest.items--; showChest(h.chest); } state.hidden.splice(state.hidden.indexOf(h), 1); }
+function unhide(h) { if (MP.on && h.key) MP.net.del('hid/' + h.key); if (h.g) dyn.remove(h.g); if (h.chest) { h.chest.items--; showChest(h.chest); } state.hidden.splice(state.hidden.indexOf(h), 1); }
 const beside = h => (h.chest ? { x: h.x, z: h.z + 1.5 } : h);
 
 // ---- Bot friends: the stand-in for classmates --------------------------------------------------
@@ -199,7 +210,7 @@ function botThink(a) {
     T.push(go({ x: PLACES.desk.x - 5 + rng() * 9, z: PLACES.desk.z + 2 + rng() * 4 }), wait(tune.bot_plan_time * a.pace), act(() => { a.planStatus = 'sent'; }), wait(tune.bot_approve_time), act(() => { a.planStatus = 'ok'; }));
     return;
   }
-  const h = state.hidden.find(x => x.owner === a.i);
+  const h = state.hidden.find(x => x.owner === a.id);
   if (h) { T.push(go(beside(h)), act(() => { if (state.hidden.includes(h)) unhide(h); }), go(padStand(a)), wait(tune.build_time), act(() => install(a, h.part))); return; }
   if (a.loose || a.doodle) { T.push(go(padStand(a)), wait(tune.bot_fix_time), act(() => { a.loose = a.doodle = false; refreshActor(a); })); return; }
   if (state.t >= a.prankReady) {
@@ -261,7 +272,8 @@ function liftOff(a) {
   r.position.set(PLACES.launch.x, 0.4 + gh(PLACES.launch.x, PLACES.launch.z), PLACES.launch.z);
   const fl = mesh(geo('flame', () => new THREE.ConeGeometry(0.6, 2.2, 12)), glow(0xffb347), 0, -0.9, 0); fl.rotation.x = Math.PI; r.add(fl); dyn.add(r);
   state.fx.push({ r, fl, t: 0 }); state.fame.push(a.name); state.hud = '';
-  if (a.bot) toast(`${a.name} 발사! (${state.fame.length}번째)`); sfx('launch'); events.push('launch:' + a.name);
+  if (a === me() && MP.on) MP.net.set('fame/' + MP.id, MP.net.now());
+  if (a !== me()) toast(`${a.name} 발사! (${state.fame.length}번째)`); sfx('launch'); events.push('launch:' + a.name);
 }
 
 // ---- What the player can do right here ---------------------------------------------------------
@@ -270,8 +282,8 @@ function findNear() {
   const offer = (d, o) => { if (d <= (o.range || R) && (!best || d < best.d)) best = Object.assign(o, { d }); };
   if (m.carry) { const c = state.chests.find(c2 => dist(m, c2) < R + 0.3); return c ? { kind: 'stash', label: '상자에 숨기기', x: c.x, z: c.z, y: 2.4, chest: c } : { kind: 'stash', label: '바닥에 숨기기', x: m.x, z: m.z, y: 3.2 }; }
   state.chests.forEach(c => offer(dist(m, c), { kind: 'chest', label: '상자 열기', x: c.x, z: c.z, y: 2.4, ref: c, range: R + 0.3 }));
-  state.actors.forEach(a => { if (a.bot && a.carry && a.carry.owner === 0) offer(dist(m, a), { kind: 'catch', label: '잡아라!', x: a.x, z: a.z, y: 3.4, ref: a, range: R + 0.4 }); });
-  state.hidden.forEach(h => { if (h.owner === 0 && !h.chest) offer(dist(m, h), { kind: 'find', label: '되찾기', x: h.x, z: h.z, y: 2.2, ref: h }); });
+  state.actors.forEach(a => { if (a !== m && a.carry && a.carry.owner === m.id) offer(dist(m, a), { kind: 'catch', label: '잡아라!', x: a.x, z: a.z, y: 3.4, ref: a, range: R + 0.4 }); });
+  state.hidden.forEach(h => { if (h.owner === m.id && !h.chest) offer(dist(m, h), { kind: 'find', label: '되찾기', x: h.x, z: h.z, y: 2.2, ref: h }); });
   offer(dist(m, PLACES.gacha), { kind: 'gacha', label: m.mission ? '임무 카드 보기' : '임무 뽑기', x: PLACES.gacha.x, z: PLACES.gacha.z, y: 3.6, range: R + 0.4 });
   offer(dist(m, PLACES.desk), { kind: 'desk', label: m.planStatus === 'ok' ? '내 계획서 보기' : '계획서 쓰기', x: PLACES.desk.x, z: PLACES.desk.z, y: 2.2, range: R + 0.4 });
   keepers.forEach(k => { if (k.id === 'chief') offer(dist(m, k), { kind: 'chief', label: m.stage === k.era && eraDone(m) && m.testStatus !== 'sent' ? '시험 보기' : '말 걸기', x: k.x, z: k.z, y: 4.3, ref: k, range: R + 0.4 }); else if (k.id !== 'guide') offer(dist(m, k), { kind: 'keeper', label: '말 걸기', x: k.x, z: k.z, y: 3.7, ref: k }); });
@@ -287,17 +299,17 @@ function findNear() {
 function doAction(n) {
   const m = me();
   if (n.kind === 'stash') {
-    const v = state.actors[m.carry.owner];
-    if (dist(m, v.pad) < tune.stash_min_dist) { toast('너무 가까워! 더 멀리 가서 숨기자'); sfx('bad'); return; }
+    const v = state.actors.find(a => a.id === m.carry.owner);
+    if (v && dist(m, v.pad) < tune.stash_min_dist) { toast('너무 가까워! 더 멀리 가서 숨기자'); sfx('bad'); return; }
     stash(m, m.x + Math.sin(m.face) * 0.9, m.z + Math.cos(m.face) * 0.9, n.chest); toast(n.chest ? '쉿! 상자에 넣고 뚜껑을 닫았다' : '쉿! 바닥에 숨겼다', 'good'); sfx('pop');
   }
   if (n.kind === 'chest') {
-    const mine = state.hidden.filter(h => h.chest === n.ref && h.owner === 0);
+    const mine = state.hidden.filter(h => h.chest === n.ref && h.owner === m.id);
     if (mine.length) { mine.forEach(h => { unhide(h); state.bag.push(h.part); }); toast(`상자에서 ${josa(mine.map(h => PART[h.part].name).join(', '), '을', '를')} 찾았다! 작업장에 다시 달자`, 'good'); sfx('ok'); state.hud = ''; }
     else if (n.ref.items) say('보물상자', ['친구 물건이 들어 있다. 내 것은 아니니 살짝 닫아 두자.']);
     else { toast('텅 빈 보물상자다. 물건을 숨기기 딱 좋겠는걸'); sfx('blip'); }
   }
-  if (n.kind === 'catch') { const a = n.ref, id = a.carry.part; a.carry = null; a.tasks.length = 0; refreshActor(a); state.bag.push(id); toast(`잡았다! ${josa(PART[id].name, '을', '를')} 되찾았어`, 'good'); sfx('ok'); }
+  if (n.kind === 'catch') { const a = n.ref, id = a.carry.part; if (a.remote) mpSend(a.id, { k: 'caught', by: m.id }); a.carry = null; a.tasks.length = 0; refreshActor(a); state.bag.push(id); toast(`잡았다! ${josa(PART[id].name, '을', '를')} 되찾았어`, 'good'); sfx('ok'); }
   if (n.kind === 'find') { unhide(n.ref); state.bag.push(n.ref.part); toast(`${PART[n.ref.part].name} 찾았다! 작업장에 다시 달자`, 'good'); sfx('pop'); state.hud = ''; }
   if (n.kind === 'gacha') {
     if (!m.mission) { m.mission = pick(MISSIONS); sfx('ok'); events.push('mission:' + m.mission.id); }
@@ -377,7 +389,7 @@ function testForm(e) { // the early eras end in a drawing and its title; the tea
     (m.testStatus === 'back' && state.testNote ? `<div class="note">선생님 한마디: ${esc(state.testNote)}</div>` : '') +
     '<canvas id="cave" width="640" height="300" style="width:100%;border-radius:18px;margin-top:8px;touch-action:none;display:block"></canvas><div class="opts" style="margin-top:8px">' +
     pens.map((p, i) => `<button class="opt pen" data-c="${p}" style="background:${p};width:44px;height:44px;padding:0;border-radius:50%;${i ? '' : 'outline:4px solid #4a3d6b'}"></button>`).join('') +
-    '<button class="opt" id="cClear">다 지우기</button></div><label>그림 제목</label><input id="t_title" maxlength="24" placeholder="예: 보름달 뜬 사냥 밤">' +
+    '<button class="opt" id="cClear">다 지우기</button></div><label>그림 제목</label><input id="t_title" maxlength="24" placeholder="' + (T.ph || '예: 보름달 뜬 사냥 밤') + '">' +
     '<div class="opts"><button class="opt" id="pSend" style="background:var(--sun)">선생님께 보여 드리기</button><button class="opt" id="pLater">나중에 할게</button></div></div>';
   $('t_title').value = d.title || '';
   let drawn = !!d.img;
@@ -401,18 +413,115 @@ function testForm(e) { // the early eras end in a drawing and its title; the tea
 function keeperTalk(k) {
   const m = me(), s = SHOP[k.id], mine = PARTS.filter(p => p.shop === k.id);
   if (s.era < m.stage) return say(k.name, ['오, 너는 벌써 이 시대를 지나갔구나!', `${ERAS[m.stage].name}에서도 힘내!`]);
+  if (s.era < 3 && !state.met[s.era]) return say(k.name, [`잠깐! 먼저 언덕 위 ${ERAS[s.era].chief}에게 인사하고 와.`, '그래야 무엇을 만들지 알 수 있지!']);
   if (m.stage === 3 && m.planStatus !== 'ok') return say(k.name, [`${s.name}에 어서 와!`, `${mine.map(p => p.item).join(', ')}… 다 있지. 하지만 계획서에 도장을 받아야 줄 수 있어.`]);
   if (state.t < (state.sulk[k.id] || 0)) return say(k.name, [`잠깐만, ${Math.ceil(state.sulk[k.id] - state.t)}초만 있다가 다시 물어봐 줄게.`]);
   const p = eraParts(m.stage).find(q => !m.parts[q.id] && !m.away[q.id] && !state.bag.includes(q.id)); // the one next thing, in the set order
   if (mine.some(q => m.away[q.id])) return say(k.name, ['어머, 물건을 잃어버렸다고? 반짝이는 곳이나 보물상자를 찾아봐. 새로 줄 순 없어!']);
   if (!p) return say(k.name, [m.stage < 3 ? `필요한 건 다 챙겼네! 네 자리에서 만들고 ${ERAS[m.stage].chief}에게 시험을 보러 가.` : '필요한 건 다 챙겼네! 작업장에서 조립하고 발사대로 가 봐.']);
   if (p.shop !== k.id) { sfx('bad'); return say(k.name, [`잠깐, 순서가 있어! 지금은 ${josa(p.name, '을', '를')} 만들 차례야.`, `${SHOP[p.shop].name}에 가서 ${josa(p.item, '을', '를')} 먼저 구해 와. 우리 가게는 그다음이야!`]); }
-  if (state.bag.length >= tune.bag_size) return say(k.name, ['가방이 꽉 찼잖아! 작업장에 가서 조립하고 와.']);
+  if (state.bag.length >= tune.bag_size) return say(k.name, [`가방이 꽉 찼잖아! 네 ${ER(m).work}에 가서 먼저 만들고 와.`]);
+  if (p.kind === 'word' || p.kind === 'num') return typedQuiz(k, p);
+  if (p.kind === 'knap') return knapGame(k, p);
+  if (p.kind === 'scope') return scopeGame(k, p);
   const order = p.a.map((t, i) => ({ t, ok: i === 0 })); for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
   ask(k.name, `${josa(p.item, '이', '가')} 필요하구나? 그럼 하나만 맞혀 봐.<br><b>${p.q}</b>`, order.map(o => ({ label: o.t, fn: () => {
-    if (o.ok) { state.bag.push(p.id); state.hud = ''; sfx('ok'); events.push('item:' + p.id); say(k.name, [p.fact, `자, ${p.item}! 네 ${ER(m).work}에서 ${josa(p.name, '을', '를')} 만들어.`]); }
+    if (o.ok) giveItem(k, p);
     else { state.sulk[k.id] = state.t + tune.quiz_retry; sfx('bad'); say(k.name, [pick(WRONG_LINES)]); }
   } })));
+}
+function giveItem(k, p) { // into the bag; a full bag sends you off to build
+  state.bag.push(p.id); state.hud = ''; sfx('ok'); events.push('item:' + p.id); state.tries[p.id] = 0;
+  const full = state.bag.length >= tune.bag_size, W = ER(me()).work;
+  say(k.name, [p.fact, full ? `자, ${p.item}! 가방이 꽉 찼어(${state.bag.length}/${tune.bag_size}). 얼른 네 ${W}에 가서 만들어!` : `자, ${p.item}! 네 ${W}에서 ${josa(p.name, '을', '를')} 만들어.`]);
+}
+const norm = t => String(t).replace(/[\s.,!?~]/g, '');
+function typedQuiz(k, p) { // write the answer: a riddle with a hint after two misses, or a number with up and down hints
+  openUI({ kind: 'plan', mid: true });
+  $('modal').innerHTML = `<div class="bubble form"><div class="who">${esc(k.name)}</div>${josa(p.item, '이', '가')} 필요하구나? 그럼 맞혀 봐!<br><b style="font-size:24px">${p.q}</b>` +
+    `<input id="qa" maxlength="14" autocomplete="off" ${p.kind === 'num' ? 'inputmode="decimal"' : ''} placeholder="${p.kind === 'num' ? '숫자만 (' + p.unit + ')' : '답을 써 봐'}" style="margin-top:12px">` +
+    '<div id="qfb" class="note" style="display:none"></div><div class="opts"><button class="opt" id="pSend" style="background:var(--sun)">확인</button><button class="opt" id="pLater">다음에</button></div></div>';
+  const fb = (t, good) => { const e = $('qfb'); e.style.display = 'block'; e.style.background = good ? '#d6f5e6' : '#ffe3e0'; e.innerHTML = t; };
+  const check = () => {
+    const v = $('qa').value.trim(); if (!v) return;
+    const n = (state.tries[p.id] = (state.tries[p.id] || 0) + 1);
+    if (p.kind === 'num') {
+      const x = parseFloat(v.replace(/,/g, '')); if (isNaN(x)) { state.tries[p.id]--; return fb('숫자로 써 줘!'); }
+      if (Math.abs(x - p.ans) <= p.tol) { closeUI(); return giveItem(k, p); }
+      sfx('bad'); fb(`<b style="font-size:26px">${x < p.ans ? '업!' : '다운!'}</b> ${x}${p.unit}보다 ${x < p.ans ? '더 많아' : '더 적어'}. (${n}번째 도전)`);
+    } else {
+      if (p.ans.some(a => norm(a) === norm(v))) { closeUI(); return giveItem(k, p); }
+      sfx('bad');
+      if (n >= 4) { closeUI(); return say(k.name, [`땡! 정답은 "${p.ans[0]}"였어. 이번만 특별히 줄게!`], () => giveItem(k, p)); }
+      fb(n >= 2 ? `땡! 힌트: ${p.hint}` : pick(['땡! 다시 생각해 봐.', '아쉽다! 한 번 더!']));
+    }
+    $('qa').value = ''; $('qa').focus();
+  };
+  $('pSend').onclick = check; $('qa').onkeydown = e => { if (e.key === 'Enter') check(); };
+  $('pLater').onclick = () => closeUI(); setTimeout(() => $('qa') && $('qa').focus(), 50);
+}
+function knapGame(k, p) { // tap the stone to knock flakes off until only the dotted axe head is left
+  const W = 44, H = 26, C = 12, axe = [[13, 6], [31, 9], [35, 13], [31, 18], [13, 21], [10, 13]];
+  const inPoly = (x, y) => { let c = false; for (let i = 0, j = axe.length - 1; i < axe.length; j = i++) { const [xi, yi] = axe[i], [xj, yj] = axe[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; };
+  let rock, tgt, outN, flakes = [];
+  const fresh = () => { rock = []; tgt = []; outN = 0; for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const dx = (x - 22) / 20, dy = (y - 13) / 12, wob = 0.08 * Math.sin(x * 1.7 + y * 0.9); const on = dx * dx + dy * dy < 1 + wob; rock.push(on); const t = on && inPoly(x + 0.5, y + 0.5); tgt.push(t); if (on && !t) outN++; } };
+  fresh();
+  openUI({ kind: 'knap', mid: true });
+  $('modal').innerHTML = `<div class="bubble" style="width:min(640px,94vw);text-align:center"><div class="who">${esc(k.name)} · 돌 깨기</div>${p.q}<canvas id="knap" width="${W * C}" height="${H * C}" style="width:100%;border-radius:18px;margin-top:8px;touch-action:none;display:block;background:#f3e3c0"></canvas><div id="kst" style="margin-top:6px"></div><div class="opts" style="justify-content:center"><button class="opt" id="kNew">새 돌로 다시</button><button class="opt" id="pLater">그만할래</button></div></div>`;
+  const cv = $('knap'), x = cv.getContext('2d');
+  const stats = () => { let left = 0, keep = 0, all = 0; rock.forEach((r, i) => { if (tgt[i] || inPoly((i % W) + 0.5, Math.floor(i / W) + 0.5)) { all++; if (r) keep++; } else if (r) left++; }); return { done: 1 - left / outN, keep: keep / all }; };
+  const draw = () => {
+    x.fillStyle = '#f3e3c0'; x.fillRect(0, 0, cv.width, cv.height);
+    rock.forEach((r, i) => { if (!r) return; const cx = (i % W) * C, cy = Math.floor(i / W) * C, sh = 150 + ((i * 37) % 7) * 9; x.fillStyle = `rgb(${sh},${sh - 6},${sh - 18})`; x.beginPath(); x.roundRect(cx + 0.5, cy + 0.5, C - 1, C - 1, 3); x.fill(); });
+    x.setLineDash([8, 6]); x.lineWidth = 4; x.strokeStyle = '#ff8a5c'; x.beginPath(); axe.forEach(([ax, ay], i) => (i ? x.lineTo : x.moveTo).call(x, ax * C, ay * C)); x.closePath(); x.stroke(); x.setLineDash([]);
+    flakes.forEach(f2 => { x.fillStyle = 'rgba(140,130,110,' + f2.a + ')'; x.fillRect(f2.x, f2.y, 6, 6); });
+    const st = stats(); $('kst').textContent = `다듬기 ${Math.round(st.done * 100)}% · 도끼 날 ${Math.round(st.keep * 100)}% 남음`;
+  };
+  const anim = () => { if (!state.ui || state.ui.kind !== 'knap') return; flakes = flakes.filter(f2 => (f2.a -= 0.05) > 0); flakes.forEach(f2 => { f2.x += f2.vx; f2.y += f2.vy; f2.vy += 0.4; }); draw(); if (flakes.length) requestAnimationFrame(anim); };
+  cv.onpointerdown = ev => {
+    const b = cv.getBoundingClientRect(), px = (ev.clientX - b.left) * cv.width / b.width / C, py = (ev.clientY - b.top) * cv.height / b.height / C; let hit = 0;
+    rock.forEach((r, i) => { if (r && Math.hypot((i % W) + 0.5 - px, Math.floor(i / W) + 0.5 - py) < 2.3) { rock[i] = false; hit++; for (let q = 0; q < 2; q++) flakes.push({ x: (i % W) * C, y: Math.floor(i / W) * C, vx: (Math.random() - 0.5) * 6, vy: -Math.random() * 5, a: 1 }); } });
+    if (!hit) return; tone(300 + Math.random() * 200, 0.06, 'square', 0.12); anim();
+    const st = stats();
+    if (st.keep < 0.82) { sfx('bad'); toast('앗, 도끼 날까지 깨져 버렸다! 새 돌로 다시 해 보자', 'bad'); fresh(); draw(); return; }
+    if (st.done >= 0.9) { closeUI(); giveItem(k, p); }
+  };
+  $('kNew').onclick = () => { fresh(); draw(); }; $('pLater').onclick = () => closeUI(); draw();
+}
+function scopeGame(k, p) { // two telescope views of the night sky; tap the four things that are different
+  const R = 140, L = { x: 165, y: 160 }, Rt = { x: 475, y: 160 }; let s0 = 3; const r = () => { s0 = (s0 * 16807) % 2147483647; return s0 / 2147483647; };
+  const stars = Array.from({ length: 26 }, () => { const a = r() * 6.283, d = Math.sqrt(r()) * 125; return [Math.cos(a) * d, Math.sin(a) * d, 1 + r() * 1.8]; });
+  const cand = [{ id: 'jmoon', x: 103, y: 18 }, { id: 'crater', x: -66, y: -54 }, { id: 'star', x: stars[5][0], y: stars[5][1] }, { id: 'ring', x: -40, y: 72 }, { id: 'comet', x: 60, y: -80 }, { id: 'jcolor', x: 40, y: 20 }];
+  for (let i = cand.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [cand[i], cand[j]] = [cand[j], cand[i]]; }
+  const diff = cand.slice(0, 4), has = id => diff.some(d => d.id === id), found = new Set(); let miss = [];
+  openUI({ kind: 'scope', mid: true });
+  $('modal').innerHTML = `<div class="bubble" style="width:min(700px,95vw);text-align:center"><div class="who">${esc(k.name)} · 망원경 틀린 그림 찾기</div>${p.q}<canvas id="scope" width="640" height="320" style="width:100%;margin-top:8px;touch-action:none;display:block"></canvas><div id="sst" style="margin-top:6px"></div><div class="opts" style="justify-content:center"><button class="opt" id="pLater">그만할래</button></div></div>`;
+  const cv = $('scope'), x = cv.getContext('2d');
+  const sky = (c, right) => {
+    x.save(); x.translate(c.x, c.y); x.beginPath(); x.arc(0, 0, R, 0, 6.283); x.clip();
+    x.fillStyle = '#1d1840'; x.fillRect(-R, -R, R * 2, R * 2);
+    stars.forEach(([sx, sy, sr], i) => { if (right && i === 5 && has('star')) return; x.fillStyle = '#fff6d8'; x.beginPath(); x.arc(sx, sy, sr, 0, 6.283); x.fill(); });
+    x.fillStyle = '#f2ead2'; x.beginPath(); x.arc(-60, -48, 30, 0, 6.283); x.fill(); // the moon and its craters
+    [[-66, -54, 7], [-48, -38, 5], [-62, -32, 4]].forEach(([cx, cy, cr], i) => { if (right && i === 0 && has('crater')) return; x.fillStyle = '#d6cdb0'; x.beginPath(); x.arc(cx, cy, cr, 0, 6.283); x.fill(); });
+    x.fillStyle = right && has('jcolor') ? '#9fd0e8' : '#e8b98a'; x.beginPath(); x.arc(40, 20, 17, 0, 6.283); x.fill(); // Jupiter and its four moons
+    x.fillStyle = 'rgba(160,90,60,.5)'; x.fillRect(23, 15, 34, 4); x.fillRect(24, 24, 32, 3);
+    [70, 84, 103, 118].forEach((mx, i) => { if (right && i === 2 && has('jmoon')) return; x.fillStyle = '#fff'; x.beginPath(); x.arc(mx, 18 + (i % 2) * 4, 3.2, 0, 6.283); x.fill(); });
+    x.fillStyle = '#f2d98a'; x.beginPath(); x.arc(-40, 72, 11, 0, 6.283); x.fill(); // Saturn
+    if (!(right && has('ring'))) { x.strokeStyle = '#d9c39a'; x.lineWidth = 3; x.beginPath(); x.ellipse(-40, 72, 22, 6, -0.3, 0, 6.283); x.stroke(); }
+    if (right && has('comet')) { x.fillStyle = '#bfe9ff'; x.beginPath(); x.arc(60, -80, 5, 0, 6.283); x.fill(); x.strokeStyle = 'rgba(191,233,255,.6)'; x.lineWidth = 5; x.beginPath(); x.moveTo(60, -80); x.lineTo(95, -100); x.stroke(); }
+    found.forEach(id => { const d = diff.find(q => q.id === id); x.strokeStyle = '#ffd166'; x.lineWidth = 4; x.beginPath(); x.arc(d.x, d.y, 18, 0, 6.283); x.stroke(); });
+    miss.forEach(m2 => { if (m2.right !== right) return; x.strokeStyle = 'rgba(255,107,107,' + m2.a + ')'; x.lineWidth = 4; x.beginPath(); x.moveTo(m2.x - 8, m2.y - 8); x.lineTo(m2.x + 8, m2.y + 8); x.moveTo(m2.x + 8, m2.y - 8); x.lineTo(m2.x - 8, m2.y + 8); x.stroke(); });
+    x.restore(); x.lineWidth = 14; x.strokeStyle = '#e0b450'; x.beginPath(); x.arc(c.x, c.y, R + 4, 0, 6.283); x.stroke();
+  };
+  const draw = () => { x.clearRect(0, 0, 640, 320); sky(L, false); sky(Rt, true); $('sst').textContent = `찾은 곳 ${found.size} / 4`; };
+  cv.onpointerdown = ev => {
+    const b = cv.getBoundingClientRect(), px = (ev.clientX - b.left) * 640 / b.width, py = (ev.clientY - b.top) * 320 / b.height;
+    const right = px > 320, c = right ? Rt : L, lx = px - c.x, ly = py - c.y; if (Math.hypot(lx, ly) > R) return;
+    const d = diff.find(q => !found.has(q.id) && Math.hypot(q.x - lx, q.y - ly) < 24);
+    if (d) { found.add(d.id); sfx('pop'); } else { sfx('bad'); miss.push({ x: lx, y: ly, right, a: 1 }); setTimeout(() => { miss = []; if (state.ui && state.ui.kind === 'scope') draw(); }, 700); }
+    draw(); if (found.size === 4) setTimeout(() => { closeUI(); giveItem(k, p); }, 450);
+  };
+  $('pLater').onclick = () => closeUI(); draw();
 }
 function myPad() {
   const m = me();
@@ -423,7 +532,7 @@ function myPad() {
 }
 function otherPad(v) {
   const m = me(), o = k => { const why = canPrank(m, v, k); return { off: !!why, sub: why }; };
-  const E = ERAS[v.stage], peek = v.stage < 3 ? [] : [{ label: '계획서 엿보기', fn: () => v.planStatus === 'none' ? say(v.name, ['(아직 계획서를 쓰는 중인가 봐. 책상이 비어 있다.)']) : ask(`${v.name}의 계획서`, planHtml({ ship: v.name + '호', why: v.mission.bot[0], what: v.mission.bot[1], safe: v.mission.bot[2], pack: v.mission.bot[3] }, v.mission.name), [{ label: '닫기' }], null, true) }];
+  const E = ERAS[v.stage], peek = v.stage < 3 || !v.bot ? [] : [{ label: '계획서 엿보기', fn: () => v.planStatus === 'none' ? say(v.name, ['(아직 계획서를 쓰는 중인가 봐. 책상이 비어 있다.)']) : ask(`${v.name}의 계획서`, planHtml({ ship: v.name + '호', why: v.mission.bot[0], what: v.mission.bot[1], safe: v.mission.bot[2], pack: v.mission.bot[3] }, v.mission.name), [{ label: '닫기' }], null, true) }];
   ask(`${v.name}의 ${E.work}`, `${E.name} · ${count(v)}/${total(v)}개` + (v.stage === 3 ? ` · 임무: ${v.mission.name}` : '') + (state.t < v.shieldUntil ? ' · 경보 중' : ''), [...peek,
     Object.assign({ label: '물건 들고 튀기', fn: () => { prank(m, v, 'hide'); sfx('pop'); toast(`${PART[m.carry.part].name} 획득! 멀리 가서 숨기자`, 'good'); } }, o('hide')),
     Object.assign({ label: E.loose.act, fn: () => { prank(m, v, 'loose'); sfx('pop'); toast(`${E.loose.act} 성공. 튀어!`, 'good'); } }, o('loose')),
@@ -482,7 +591,7 @@ function uiStep(dt) {
     c.fillStyle = '#ffd166'; c.beginPath(); c.arc(220, 220, 34, 0, 6.3); c.fill();
     $('dialN').textContent = `${u.hits} / ${tune.repair_hits}`;
     if (u.hits >= tune.repair_hits) { me().loose = false; refreshActor(me()); closeUI(); toast(ER(me()).loose.fixed, 'good'); sfx('ok'); }
-  } else if (u.kind === 'plan' && pressed('Escape')) $('pLater').click();
+  } else if ((u.kind === 'plan' || u.kind === 'knap' || u.kind === 'scope') && pressed('Escape')) $('pLater').click();
 }
 
 // ---- The quest line: always one next thing ---------------------------------------------------------
@@ -502,9 +611,9 @@ function quest() {
     if (m.planStatus === 'back') return Object.assign({ text: '계획서가 돌아왔어! 책상에서 고쳐 쓰자' }, PLACES.desk);
     if (m.planStatus === 'sent') return Object.assign({ text: '도장을 기다리는 중… 책상에서 선생님께 보여 드리자' }, PLACES.desk);
   }
-  const th = state.actors.find(a => a.carry && a.carry.owner === 0);
+  const th = state.actors.find(a => a !== m && a.carry && a.carry.owner === m.id);
   if (th) return { text: `${josa(th.name, '이', '가')} 내 ${josa(PART[th.carry.part].name, '을', '를')} 들고 튄다! 잡아라!`, x: th.x, z: th.z };
-  const h = state.hidden.find(x => x.owner === 0);
+  const h = state.hidden.find(x => x.owner === m.id);
   if (h) return h.chest ? { text: `내 ${josa(PART[h.part].name, '이', '가')} 보물상자에! 뚜껑이 들썩이는 상자를 찾자 (축소해서 둘러보기)` } : { text: `숨겨진 ${josa(PART[h.part].name, '을', '를')} 찾아오자! 반짝이는 곳`, x: h.x, z: h.z };
   if (m.loose) return Object.assign({ text: `${E.loose.done} 내 ${E.work}에서 ${E.loose.fix}` }, m.pad);
   if (m.doodle) return Object.assign({ text: `${E.doodle.done} 내 ${E.work}에서 ${E.doodle.fix}` }, m.pad);
@@ -523,7 +632,15 @@ function setScene(s) {
   if (s !== 'play') { $('ring').classList.add('hide'); $('prompt').style.transform = 'translate(-999px,0)'; }
   if (s === 'figures') buildLineup();
 }
-function start() { reset(); setScene('play'); sfx('ok'); }
+function start() {
+  const room = ($('roomIn').value || '').replace(/\D/g, '').slice(0, 6);
+  if (MP.on) return location.reload(); // a new game in a room: come back in fresh
+  if ($('bStart').disabled) return; // already joining
+  if (!room) { reset(); setScene('play'); sfx('ok'); return; }
+  const msg = $('joinMsg'), b = $('bStart'); b.disabled = true; msg.textContent = '연결 중…';
+  mpJoin(room, t => { msg.textContent = t; }).then(() => { setScene('play'); sfx('ok'); toast(`${room}번 방에 들어왔어! 반 친구들과 함께 시간 여행 시작`, 'good'); })
+    .catch(() => { b.disabled = false; msg.textContent = '방에 연결하지 못했어요. 와이파이를 확인하거나, 방 번호를 비우고 혼자 해 보세요.'; });
+}
 function setZoom(dir) { zoom = Math.max(tune.zoom_min, Math.min(tune.zoom_max, zoom * Math.pow(tune.zoom_step, dir))); if (Math.abs(zoom - 1) < 0.12) zoom = 1; }
 const SKIES = [[0xf5c79a, 0xf6d3b0], [0xa9dcf2, 0xc9e8f2], [0x9fbbe0, 0xbccbe2], [0x2e2559, 0x6c5fa8]]; // dusk, spring sky, hazy sky, space
 function showIsland(e) { // only one island is drawn at a time; each has its own sky
@@ -574,7 +691,7 @@ function playStep(dt) {
     state.staged = true; const th = state.actors[2], v = state.actors[1], pid = v.order[v.order.length - 1];
     if (pid && !canPrank(Object.assign({}, th, { prankReady: 0 }), v, 'hide')) { th.prankReady = 0; th.tasks.length = 0; planPrank(th, v, { x: PLACES.spawn.x - 1.5, z: PLACES.spawn.z - 3 }); th.tasks.push(act(() => toast(`어? ${josa(th.name, '이', '가')} ${v.name}의 ${josa(PART[pid].name, '을', '를')} 들고 튄다!`))); const t0 = th.tasks.pop(); th.tasks.splice(1, 0, t0); }
   }
-  state.actors.forEach(a => { if (a.bot) botStep(a, dt); });
+  state.actors.forEach(a => { if (a.bot) botStep(a, dt); }); mpMove(dt); mpTick();
   const fz = zoneOf(W3.focus.z); // only the island the camera is on is drawn
 
   keepers.forEach(k => { k.mesh.visible = zoneOf(k.z) === fz; }); state.chests.forEach(c => { c.g.visible = zoneOf(c.z) === fz; });
@@ -603,7 +720,7 @@ function playStep(dt) {
   } else view(m.x, m.z);
 }
 function finish() {
-  const m = me(), rank = state.fame.indexOf(m.name) + 1;
+  const m = me(), mine = MP.fame[MP.id], rank = MP.on && mine ? 1 + Object.values(MP.fame).filter(t => t < mine).length : state.fame.indexOf(m.name) + 1;
   state.gained = `${rank}번째로 발사 성공! 임무: ${m.mission.name}`; state.score = 10;
   const trip = ERAS.slice(0, 3).map((E, i) => `${E.name} ${fmt(m.eraTime[i] || 0)}`).join(' → ') + ` → 발사 ${fmt(state.t)}`;
   $('results').innerHTML = `<div class="panel"><b style="font-size:30px">발사 성공! ${state.actors.length}명 중 ${rank}번째로 우주에 나갔어요</b><div style="font-size:16px;color:#8a7fa8;margin:4px 0 8px">시간 여행 기록: ${trip}</div><canvas id="pic" width="1400" height="560"></canvas>
@@ -625,7 +742,7 @@ function drawWorld() {
   const fz = zoneOf(W3.focus.z);
   places.forEach(p => { if (zoneOf(p.z) === fz && Math.abs(p.z - W3.focus.z) < seen) put(p.tag, p.x, p.y + gh(p.x, p.z), p.z, p.mine ? 1 : 2); else off(p.tag); });
   keepers.forEach(k => { if (close && zoneOf(k.z) === fz && dist(m, k) < 13) put(k.tag, k.x, k.y + gh(k.x, k.z), k.z, 3); else off(k.tag); });
-  state.actors.forEach(a => { if (!a.bot) return; const d = dist(m, a); if (!a.launched && close && zoneOf(a.z) === fz && d < 15) put(a.tag, a.x, a.h + 2.75, a.z, 4 + d); else off(a.tag); });
+  state.actors.forEach(a => { if (a === m) return; const d = dist(m, a); if (!a.launched && close && zoneOf(a.z) === fz && d < 15) put(a.tag, a.x, a.h + 2.75, a.z, 4 + d); else off(a.tag); });
   list.sort((a, b) => a.pri - b.pri).forEach(o => {
     const p = toScreen(o.x, o.y, o.z), w = o.el._w, tries = o.pri <= 2 ? 3 : 1; if (!p.on) return off(o.el);
     let y = p.y, r = null;
@@ -735,18 +852,28 @@ $('act').addEventListener('pointerdown', e => { e.preventDefault(); hit.add('Spa
 // ---- The teacher's page (?teacher=1): every plan sent in this browser ------------------------------
 function teacherPage() {
   $('ui').classList.add('hide'); $('game').classList.add('hide');
-  const root = document.createElement('div'); root.id = 'teacher'; document.body.appendChild(root); let seen = '';
+  const root = document.createElement('div'); root.id = 'teacher'; document.body.appendChild(root);
+  const go = () => { const room = (params.get('room') || '').replace(/\D/g, ''); if (room) teacherRoom(root, room); else localTeacher(root); };
+  let ok = false; try { ok = sessionStorage.getItem('sf:teacher') === '1'; } catch (e) { /* no storage: ask every time */ }
+  if (ok) return go();
+  root.innerHTML = '<h1>우주의 숲 · 선생님 화면</h1><div class="plan">선생님 암호를 넣어 주세요.<div class="row"><input id="tpinPage" type="password" inputmode="numeric" placeholder="선생님 암호"><button class="btn" id="tpinGo">들어가기</button></div></div>';
+  const tryPin = () => { if ($('tpinPage').value.trim() === TEACHER_PIN) { try { sessionStorage.setItem('sf:teacher', '1'); } catch (e) { /* fine */ } go(); } else $('tpinPage').value = ''; };
+  $('tpinGo').onclick = tryPin; $('tpinPage').onkeydown = e => { if (e.key === 'Enter') tryPin(); };
+}
+function localTeacher(root) {
+  let seen = '';
   const draw = () => {
     const raw = JSON.stringify(loadPlans()); if (raw === seen || (document.activeElement && document.activeElement.tagName === 'INPUT')) return; seen = raw;
     const all = loadPlans(), word = { sent: '확인 대기', ok: 'OK', back: '돌려보냄', none: '작성 중' };
     const ids = Object.keys(all).filter(id => all[id] && all[id].kind).sort((a, b) => (all[a].status === 'sent' ? 0 : 1) - (all[b].status === 'sent' ? 0 : 1) || all[b].stage - all[a].stage);
-    root.innerHTML = '<h1>우주의 숲 · 선생님 화면</h1><div>석기 · 철기 · 산업 시대의 그림과 우주 시대 탐사 계획서를 보고 OK를 눌러 주세요. OK가 나면 학생 섬의 시간의 포탈이 열립니다. 이 화면은 같은 기기, 같은 브라우저에서 낸 것만 보여 줍니다. 학생 기기에서 바로 OK할 때의 암호는 data.js의 TEACHER_PIN입니다.</div>' +
+    root.innerHTML = '<h1>우주의 숲 · 선생님 화면</h1><div class="plan">반 전체가 함께 하려면 방을 여세요. <div class="row"><input id="newRoom" inputmode="numeric" maxlength="6" placeholder="방 번호 (숫자 4자리)" value="' + (1000 + Math.floor(Math.random() * 9000)) + '"><button class="btn" id="openRoom">이 번호로 방 열기</button></div></div><div>혼자 하기(봇과 함께)로 낸 것은 아래에 보여요. 석기 · 철기 · 산업 시대의 그림과 우주 시대 탐사 계획서를 보고 OK를 눌러 주세요. OK가 나면 학생 섬의 시간의 포탈이 열립니다. 이 화면은 같은 기기, 같은 브라우저에서 낸 것만 보여 줍니다. 학생 기기에서 바로 OK할 때의 암호는 data.js의 TEACHER_PIN입니다.</div>' +
       (ids.length ? '' : '<div class="plan">아직 제출된 시험지나 계획서가 없습니다.</div>') + ids.map(id => { const p = all[id], plan = p.kind === 'plan';
         return `<div class="plan"><h2>${esc(p.name)} · ${ERAS[p.stage].name} ${plan ? '탐사 계획서' : ERAS[p.stage].test.title} <span class="stamp ${p.status}">${word[p.status]}</span></h2>` +
           (plan ? `임무: ${esc(p.mission)} · 우주선: ${esc(p.fields.ship || '')}<dl>` + PLAN_FIELDS.slice(1).map(f => `<dt>${f.label}</dt><dd>${esc(p.fields[f.key] || '')}</dd>`).join('') + '</dl>'
             : (p.img ? `<img src="${p.img}" style="max-width:480px;width:100%;border-radius:14px;display:block">` : '') + `<div>제목: <b>${esc(p.fields.title || '')}</b></div>`) +
           `<div class="row"><input id="n_${id}" placeholder="학생에게 한마디" value="${esc(p.note || '')}"><button class="btn" data-id="${id}" data-s="ok">OK 도장</button><button class="btn" data-id="${id}" data-s="back">돌려보내기</button></div></div>`; }).join('');
-    root.querySelectorAll('button').forEach(b => { b.onclick = () => { setStatus(b.dataset.id, b.dataset.s, $('n_' + b.dataset.id).value.trim()); seen = ''; draw(); }; });
+    root.querySelectorAll('button[data-id]').forEach(b => { b.onclick = () => { setStatus(b.dataset.id, b.dataset.s, $('n_' + b.dataset.id).value.trim()); seen = ''; draw(); }; });
+    $('openRoom').onclick = () => { const r = $('newRoom').value.replace(/\D/g, ''); if (r) location.href = location.pathname + '?teacher=1&room=' + r; };
   };
   draw(); setInterval(draw, 1000); addEventListener('storage', draw);
 }

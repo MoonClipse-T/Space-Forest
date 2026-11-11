@@ -344,9 +344,12 @@ function makeBush(x, z) {
 
 // ---- The three early eras: villagers, workshops, the things each kid makes ------------------
 const STONE = 0xbdb3a0, DARK = 0x4a3d55, BRASS = 0xe0b450, BRICK = 0xd98a6c;
-function makeVillager(era, k) { // a grown-up in the era's clothes
-  const g = makeKid({ shirt: [0xff8a73, 0x7cc6fe, 0x95e1a3, 0xc9a0ff][k % 4], hair: k % 4, hairColor: HAIR[(k * 2 + era) % HAIR.length] });
-  dressKid(g, {}, era); g.scale.setScalar(1.18); return g;
+function makeVillager(era, k, teacher) { // a grown-up in the era's clothes; the teacher wears round glasses and carries a book
+  const g = makeKid({ shirt: [0xff8a73, 0x7cc6fe, 0x95e1a3, 0xc9a0ff][k % 4], hair: teacher ? 0 : k % 4, hairColor: teacher ? 0x2f2a3d : HAIR[(k * 2 + era) % HAIR.length] });
+  dressKid(g, {}, era); g.scale.setScalar(1.18);
+  if (teacher) { const h = g.userData.head; [-1, 1].forEach(s => { const r = mesh(geo('lens', () => new THREE.TorusGeometry(0.15, 0.035, 8, 18)), mat(0x3a2f55), s * 0.19, 0.02, 0.5); h.add(r); }); put(h, mesh(cyl(0.02, 0.02, 0.12, 5), mat(0x3a2f55), 0, 0.03, 0.52), m => { m.rotation.z = Math.PI / 2; });
+    const book = mesh(rbox(0.36, 0.46, 0.1, 0.04), mat(0x5b7fd6), 0.42, 0.95, 0.25); book.rotation.y = -0.4; g.userData.body.add(book); }
+  return g;
 }
 function eraPart(id) { // the thing a kid makes in each early era, standing on their work spot
   const g = new THREE.Group(); g.userData.live = null;

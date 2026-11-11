@@ -114,11 +114,13 @@
     <p>석기 시대에서 우주 시대까지, 반 친구 30명이 함께 걷는 우주 탐사의 역사</p>
     <div class="panel">
       <input id="nameIn" maxlength="8" placeholder="내 이름 (8자까지)" autocomplete="off">
+      <input id="roomIn" maxlength="6" inputmode="numeric" placeholder="방 번호 (선생님이 알려 준 번호 · 혼자 하려면 비워 두기)" autocomplete="off" style="margin-top:8px">
+      <div id="joinMsg" style="font-size:15px;color:#8a7fa8;min-height:20px;margin-top:4px"></div>
       <div id="swatches"></div>
       <div class="keys">왼쪽 조이스틱 또는 방향키·WASD: 걷기<br>노란 버튼 또는 스페이스: 말 걸기·줍기·만들기·장난<br>시대마다 섬이 달라요. 문지기에게 그림 시험을 보고 선생님 OK를 받으면 언덕 위 포탈이 열려요<br>확대·축소 버튼 또는 마우스 휠, +/- 키: 지도처럼 멀리 보기<br>P: 쉬기 · M: 소리</div>
     </div>
     <button class="big" id="bStart">시간 여행 시작 (Enter)</button>
-    <p style="font-size:16px">이 판의 친구들은 이름에 "봇"이 붙은 컴퓨터 친구예요. 선생님 화면은 주소 끝에 ?teacher=1</p>
+    <p style="font-size:16px">방 번호를 쓰면 반 친구들과 같은 섬에서 함께해요. 비워 두면 "봇" 친구 29명과 혼자 해요. 선생님 화면은 주소 끝에 ?teacher=1</p>
   </div>
   <div id="pause" class="screen hide"><div class="panel" style="text-align:center;font-size:30px">잠깐 쉬는 중<div class="keys">P 또는 아래 버튼으로 돌아가기</div></div><button class="big" id="bResume">계속하기</button></div>
   <div id="results" class="screen hide"></div>
@@ -154,7 +156,7 @@ const pressed = code => hit.has(code); // true for one step after the key goes d
 const typing = e => /INPUT|TEXTAREA/.test(e.target.tagName);
 addEventListener('keydown', e => {
   startAudio();
-  if (typing(e)) { if (e.code === 'Enter' && e.target.id === 'nameIn') hit.add('Enter'); return; }
+  if (typing(e)) { if (e.code === 'Enter' && (e.target.id === 'nameIn' || e.target.id === 'roomIn')) hit.add('Enter'); return; }
   if (!e.repeat) { down.add(e.code); hit.add(e.code); }
   if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
 });
@@ -185,6 +187,7 @@ function tone(freq, dur, type = 'sine', vol = 0.25, when = 0) {
 let scene, state;
 </script>
 <script src="game.js"></script>
+<script src="multi.js"></script>
 <script>
 'use strict';
 // ---- Loop: fixed step, frame time clamped ---------------------------------------------
@@ -223,6 +226,7 @@ if (TEACHER) teacherPage();
 else {
   initWorld($('game'), CHEAP);
   reset();
+  $('roomIn').value = (params.get('room') || '').replace(/D/g, '');
   setScene(params.get('scene') || 'title');
   last = clock.now();
   if (params.get('manual') === '1') drawFrame();

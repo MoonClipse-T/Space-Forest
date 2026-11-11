@@ -20,7 +20,7 @@ window.CONFIG = {
   zoom_step: { value: 1.4, min: 1.1, max: 2, step: 0.05 },        // how much one press of the zoom buttons changes the view
 
   // Getting and building
-  bag_size: { value: 4, min: 2, max: 10, step: 1 },              // items the bag holds
+  bag_size: { value: 2, min: 1, max: 10, step: 1 },              // items the bag holds: full, and you must go and build
   build_time: { value: 1.6, min: 0.4, max: 5, step: 0.1 },       // seconds to fit one part
   quiz_retry: { value: 4, min: 0, max: 15, step: 1 },            // seconds a shopkeeper sulks after a wrong answer
   plan_min_chars: { value: 8, min: 1, max: 60, step: 1 },        // letters each plan answer needs

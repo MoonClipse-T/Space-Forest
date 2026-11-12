@@ -66,12 +66,21 @@ function applyReq(p) { // the teacher said OK, or sent it back
   const m = me(), e = m.stage; if (!p || p.stage !== e) return;
   if (e === 3) {
     if (m.planStatus !== 'sent') return;
-    if (p.status === 'ok') { m.planStatus = 'ok'; toast('계획서 통과! 도장 쾅! 이제 만들러 가자', 'good'); sfx('stamp'); events.push('approved'); }
-    if (p.status === 'back') { m.planStatus = 'back'; state.planNote = p.note; toast('계획서가 돌아왔어. 책상에서 고쳐 쓰자', 'bad'); sfx('bad'); }
+    if (p.status === 'ok') { m.planStatus = 'ok'; toast('계획서 통과! 도장 쾅! 이제 만들러 가자', 'good'); sfx('stamp'); events.push('approved'); teacherNote(p.note, true, '탐사 계획서'); }
+    if (p.status === 'back') { m.planStatus = 'back'; state.planNote = p.note; toast('계획서가 돌아왔어. 책상에서 고쳐 쓰자', 'bad'); sfx('bad'); teacherNote(p.note, false, '탐사 계획서'); }
   } else if (m.testStatus === 'sent') {
-    if (p.status === 'ok') { events.push('approved:' + e); advance(m); }
-    if (p.status === 'back') { m.testStatus = 'back'; state.testNote = p.note; toast(`그림이 돌아왔어. ${ERAS[e].chief}에게 가서 다시 그려 보자`, 'bad'); sfx('bad'); }
+    if (p.status === 'ok') { events.push('approved:' + e); advance(m); teacherNote(p.note, true, ERAS[e].test.title); }
+    if (p.status === 'back') { m.testStatus = 'back'; state.testNote = p.note; toast(`그림이 돌아왔어. ${ERAS[e].chief}에게 가서 다시 그려 보자`, 'bad'); sfx('bad'); teacherNote(p.note, false, ERAS[e].test.title); }
   }
+}
+function teacherNote(note, ok, what) { // 도장이든 돌려보내기든 선생님 한마디는 꼭 화면에 띄운다 (게임 중이면 끝난 뒤에)
+  note = (note || '').trim(); if (!note && ok) return;
+  (state.noteQ = state.noteQ || []).push({ note: note || '조금 더 구체적으로 써 보자.', ok, what });
+}
+function showTeacherNote() {
+  const n = state.noteQ.shift(); sfx(n.ok ? 'stamp' : 'bad');
+  ask('선생님 한마디 · ' + n.what, `<span class="stamp ${n.ok ? 'ok' : 'back'}">${n.ok ? 'OK 도장' : '돌려보냄'}</span><div class="note" style="font-size:24px;margin-top:10px${n.ok ? ';background:#dff5e8' : ''}">${esc(n.note)}</div>` +
+    (n.ok ? '' : `<div style="font-size:17px;color:#8a7fa8;margin-top:8px">${n.what === '탐사 계획서' ? '책상' : '문지기'}에게 가서 고쳐 다시 내자.</div>`), [{ label: '알겠어요!' }]);
 }
 
 // ---- A new game -----------------------------------------------------------------------------
@@ -120,7 +129,21 @@ function placeWork(a) { // a kid's work spot for the era they are in: it moves n
   a.want = eraParts(e).map(p => p.id); for (let j = a.want.length - 1; j > 0; j--) { const q = Math.floor(rng() * (j + 1)); [a.want[j], a.want[q]] = [a.want[q], a.want[j]]; }
   if (!a.bot) { const p = places.find(q => q.mine); Object.assign(p, { x: a.pad.x - 1.9 * k, z: a.pad.z + 2.3 * k }); p.tag.textContent = '내 ' + ERAS[e].work; p.tag._w = p.tag.offsetWidth || p.tag._w; }
 }
+function giveBack(by, why) { // 든 물건을 주인에게 바로 돌려준다: 다른 시대로 가거나 발사하면 주인이 다시는 못 찾으니까
+  const c = by.carry; if (!c) return; by.carry = null; by.tasks.length = 0; refreshActor(by);
+  const v = state.actors.find(a => a.id === c.owner);
+  if (v === me()) gotBack(c.part, by.name);
+  else if (v && v.remote) mpSend(v.id, { k: 'back', by: by.id, part: c.part });
+  else if (v && v.stage === PART[c.part].era && !v.parts[c.part]) install(v, c.part);
+  if (by === me()) toast(`${why || '가지고 있던'} ${josa(PART[c.part].name, '은', '는')} 주인에게 돌아갔어`, '');
+}
+function gotBack(part, who) { // 내 물건이 돌아옴 (이미 되찾았거나 다른 시대 것이면 무시)
+  const m = me(); if (m.parts[part] || state.bag.includes(part) || PART[part].era !== m.stage || state.hidden.some(h => h.owner === m.id && h.part === part)) return false;
+  state.bag.push(part); state.hud = ''; toast(`${who ? who + '이(가) 가져갔던 ' : ''}${josa(PART[part].name, '이', '가')} 돌아왔어! 작업장에 다시 달자`, 'good'); sfx('ok'); return true;
+}
+function bagOnce(part) { if (!me().parts[part] && !state.bag.includes(part)) state.bag.push(part); } // 같은 물건이 두 번 돌아와도 하나만
 function advance(a) { // the teacher said OK: through the time gate to the next era
+  if (a.carry) giveBack(a, '다음 시대로 떠나서');
   a.eraTime[a.stage] = state.t; a.stage++; a.testStatus = 'none'; a.loose = a.doodle = false; a.away = {}; a.order = [];
   state.hidden.filter(h => h.owner === a.id).forEach(unhide);
   placeWork(a); refreshActor(a);
@@ -147,7 +170,7 @@ function walk(a, dx, dz, sp, dt) {
   dx /= l; dz /= l; a.moving = true; const ox = a.x, oz = a.z; let x = a.x + dx * sp * dt, z = a.z + dz * sp * dt;
   let d = Math.atan2(dx, dz) - a.face; d = Math.atan2(Math.sin(d), Math.cos(d)); a.face += d * Math.min(1, dt * 14);
   for (const c of COL) {
-    if (Math.abs(z - c.z) > c.r + 1 || (c.portal && a.stage > c.era)) continue;
+    if (Math.abs(z - c.z) > c.r + 1 || (c.portal && a.stage > c.era && !a.carry)) continue; // 친구 물건을 든 채로는 포탈이 벽
     const px = x - c.x, pz = z - c.z, r = c.r + 0.45, q = Math.hypot(px, pz);
     if (q < r && q > 0.001) { // pushed out, and slid round the side it was heading for
       const nx = px / q, nz = pz / q, side = (-nz * dx + nx * dz) >= 0 ? 1 : -1;
@@ -272,6 +295,7 @@ function sparkle(x, y, z) { // a little burst of stars where someone leaves or l
   for (let i = 0; i < 8; i++) { const st = mesh(starGeo(0.18, 0.05), glow([0xffe680, 0xffc2e2, 0xbfe9ff][i % 3]), x, y + 1, z); dyn.add(st); state.sparks.push({ m: st, t: 0, vx: Math.cos(i * 0.785) * 2.4, vz: Math.sin(i * 0.785) * 2.4 }); }
 }
 function liftOff(a) {
+  if (a.carry && !a.remote) giveBack(a, '발사하면서');
   a.launched = true; a.mesh.visible = false; a.tag.style.transform = 'translate(-999px,0)'; a.proj.visible = false;
   const r = makeRocket(a.shirt); Object.values(r.userData.parts).forEach(p => { p.visible = true; }); ['oven', 'food', 'scan'].forEach(k => { r.userData.parts[k].visible = false; }); r.userData.ghost.visible = false;
   r.position.set(PLACES.launch.x, 0.4 + gh(PLACES.launch.x, PLACES.launch.z), PLACES.launch.z);
@@ -310,12 +334,12 @@ function doAction(n) {
   }
   if (n.kind === 'chest') {
     const mine = state.hidden.filter(h => h.chest === n.ref && h.owner === m.id);
-    if (mine.length) { mine.forEach(h => { unhide(h); state.bag.push(h.part); }); toast(`상자에서 ${josa(mine.map(h => PART[h.part].name).join(', '), '을', '를')} 찾았다! 작업장에 다시 달자`, 'good'); sfx('ok'); state.hud = ''; }
+    if (mine.length) { mine.forEach(h => { unhide(h); bagOnce(h.part); }); toast(`상자에서 ${josa(mine.map(h => PART[h.part].name).join(', '), '을', '를')} 찾았다! 작업장에 다시 달자`, 'good'); sfx('ok'); state.hud = ''; }
     else if (n.ref.items) say('보물상자', ['친구 물건이 들어 있다. 내 것은 아니니 살짝 닫아 두자.']);
     else { toast('텅 빈 보물상자다. 물건을 숨기기 딱 좋겠는걸'); sfx('blip'); }
   }
-  if (n.kind === 'catch') { const a = n.ref, id = a.carry.part; if (a.remote) mpSend(a.id, { k: 'caught', by: m.id }); a.carry = null; a.tasks.length = 0; refreshActor(a); state.bag.push(id); toast(`잡았다! ${josa(PART[id].name, '을', '를')} 되찾았어`, 'good'); sfx('ok'); }
-  if (n.kind === 'find') { unhide(n.ref); state.bag.push(n.ref.part); toast(`${PART[n.ref.part].name} 찾았다! 작업장에 다시 달자`, 'good'); sfx('pop'); state.hud = ''; }
+  if (n.kind === 'catch') { const a = n.ref, id = a.carry.part; if (a.remote) mpSend(a.id, { k: 'caught', by: m.id }); a.carry = null; a.tasks.length = 0; refreshActor(a); bagOnce(id); toast(`잡았다! ${josa(PART[id].name, '을', '를')} 되찾았어`, 'good'); sfx('ok'); }
+  if (n.kind === 'find') { unhide(n.ref); bagOnce(n.ref.part); toast(`${PART[n.ref.part].name} 찾았다! 작업장에 다시 달자`, 'good'); sfx('pop'); state.hud = ''; }
   if (n.kind === 'gacha') {
     if (!m.mission) { m.mission = pick(MISSIONS); sfx('ok'); events.push('mission:' + m.mission.id); }
     ask('임무 카드', `<canvas class="cardpic" id="cardpic" width="340" height="240"></canvas><b style="font-size:28px">${m.mission.name}</b><br>${m.mission.hint}<br><span style="font-size:18px;color:#8a7fa8">이 임무로 탐사 계획서를 써서 도장을 받자.</span>`, [{ label: '좋아!' }], () => drawMission($('cardpic').getContext('2d'), m.mission.id, 340, 240));
@@ -331,7 +355,7 @@ function doAction(n) {
 function kkPlanOK() { const m = me(); if (!m.mission) m.mission = pick(MISSIONS); if (!state.plan.ship) state.plan.ship = '선생님호'; m.planStatus = 'ok'; state.hud = ''; }
 function kkTravel() { // 섬과 섬 사이를 마음대로: 지나온 시대의 게임도 다시 해 볼 수 있게
   const here = zoneOf(me().z), names = ['석기 시대 섬', '철기 시대 섬', '산업 시대 섬', '우주 마을'];
-  ask('시간 이동 · 깍두기', '어느 시대로 갈까요? (지금 있는 곳: ' + names[here] + ')', names.map((n, e) => ({ label: n, off: e === here, fn: () => { state.warp = { t: 0, to: e }; sfx('warp'); } })).concat([{ label: '그냥 있을래' }]));
+  ask('시간 이동 · 깍두기', '어느 시대로 갈까요? (지금 있는 곳: ' + names[here] + ')', names.map((n, e) => ({ label: n, off: e === here, fn: () => { if (me().carry) giveBack(me(), '시간 이동을 해서'); state.warp = { t: 0, to: e }; sfx('warp'); } })).concat([{ label: '그냥 있을래' }]));
 }
 function kkKeeper(k) { // 가게 게임을 순서 · 시대 상관없이 해 보고, 지금 시대 것은 바로 받을 수도
   const m = me(), mine = PARTS.filter(p => p.shop === k.id), need = p => p.era === m.stage && !m.parts[p.id] && !state.bag.includes(p.id), opts = [];
@@ -379,7 +403,7 @@ const FIELD_CSS = 'width:100%;box-sizing:border-box;font:inherit;font-size:18px;
 function testHtml(d) { return (d.img ? `<img src="${d.img}" style="width:100%;border-radius:16px;display:block">` : '') + `<div style="font-size:20px;margin:8px 0">제목: <b>${esc(d.title || '')}</b></div>`; }
 function teacherReview(e) { // the teacher, at the student's tablet: needs the teacher's PIN
   const m = me(), html = e === 3 ? planHtml(state.plan, m.mission.name) : testHtml(state.tests[e]);
-  ask('선생님 확인 · ' + (e === 3 ? '탐사 계획서' : ERAS[e].test.title), html + `<input id="tpin" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="선생님 암호" style="${FIELD_CSS};${PIN_CSS}"><input id="tnote" placeholder="학생에게 한마디 (돌려보낼 때)" style="${FIELD_CSS}">`, [
+  ask('선생님 확인 · ' + (e === 3 ? '탐사 계획서' : ERAS[e].test.title), html + `<input id="tpin" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="선생님 암호" style="${FIELD_CSS};${PIN_CSS}"><input id="tnote" placeholder="학생에게 한마디 (도장 · 돌려보내기 모두 전달돼요)" style="${FIELD_CSS}">`, [
     { label: 'OK 도장 찍기', fn: c => decide(e, 'ok', c) },
     { label: '돌려보내기', fn: c => decide(e, 'back', c) }, { label: '닫기' }], null, true);
 }
@@ -700,9 +724,11 @@ function playStep(dt) {
     if (w.t >= 1.4) { state.warp = null; m.mesh.scale.setScalar(1); $('warp').style.opacity = 0; }
   } else if (zn < 3 && !state.ui && !m.launched) {
     const d = dist(m, PORTAL[zn]);
-    if (m.stage > zn && d < 1.4) { state.warp = { t: 0, to: zn + 1 }; state.near = null; sfx('warp'); events.push('warp:' + (zn + 1)); }
+    if (m.carry && m.stage > zn && d < 3.4) { if (state.t > (state.lockMsg || 0)) { state.lockMsg = state.t + 6; toast('친구 물건을 든 채로는 시간의 포탈을 지날 수 없어! 먼저 숨기거나 잡혀서 돌려주자', 'bad'); sfx('bad'); } }
+    else if (m.stage > zn && d < 1.4) { state.warp = { t: 0, to: zn + 1 }; state.near = null; sfx('warp'); events.push('warp:' + (zn + 1)); }
     else if (m.stage <= zn && d < 3.4 && state.t > (state.lockMsg || 0)) { state.lockMsg = state.t + 8; toast(`포탈이 잠겨 있어. ${ERAS[zn].chief}의 시험에 선생님 OK를 받으면 열려!`); }
   }
+  if (!state.ui && !state.act && !state.warp && !state.launching && state.noteQ && state.noteQ.length) showTeacherNote();
   if (state.ui) uiStep(dt);
   else if (state.launching || state.warp) { /* watching the rocket, or flying through a portal */ }
   else if (state.act) {

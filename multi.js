@@ -184,8 +184,14 @@ function mpSync() {
     if (JSON.stringify([parts, p.lo, p.dd, ca]) !== a.look) { a.look = JSON.stringify([parts, p.lo, p.dd, ca]); a.parts = parts; a.loose = !!p.lo; a.doodle = !!p.dd; a.carry = ca; refreshActor(a); }
     a.order = (p.or || '').split(',').filter(Boolean);
     if (p.la && !a.launched) liftOff(a);
+    // 내 물건을 든 친구가 다른 시대 섬으로 갔거나 발사했으면(옛 버전 기기 등), 5초 뒤 내 가방으로 되돌린다
+    if (a.carry && a.carry.owner === MP.id) {
+      const far = a.launched || zoneOf(a.tz) !== zoneOf(me().pad.z);
+      if (!far) a.farAt = 0; else if (!a.farAt) a.farAt = now; else if (now - a.farAt > 5000 && a.rescued !== p.ca) { a.rescued = p.ca; rescue(a); }
+    }
   });
   state.actors.filter(a => a.remote && !seen.has(a.id)).forEach(a => { // gone from the room
+    if (a.carry && a.carry.owner === MP.id) rescue(a); // 들고 나가 버렸으면 바로 되돌림
     [a.mesh, a.padG, a.proj].forEach(g => dyn.remove(g)); a.tag.remove(); COL.splice(COL.indexOf(a.padCol), 1); state.actors.splice(state.actors.indexOf(a), 1);
   });
   // Two tablets that joined in the same instant can pick the same work spot: the later id moves to a free one
@@ -196,6 +202,9 @@ function mpSync() {
   }
   state.hud = '';
 }
+function rescue(a) { // 친구가 들고 간 내 물건을 되찾고, 그 친구 손에서는 내려놓게 한다 (다시 들어와도 겹치지 않게)
+  gotBack(a.carry.part, a.name); mpSend(a.id, { k: 'caught', by: MP.id, auto: 1 });
+}
 function mpMove(dt) { // classmates glide to where their tablets last said they were
   state.actors.forEach(a => { if (!a.remote) return; const k = Math.min(1, dt * 8); a.x += (a.tx - a.x) * k; a.z += (a.tz - a.z) * k; if (Math.hypot(a.tx - a.x, a.tz - a.z) > 30) { a.x = a.tx; a.z = a.tz; } a.h = gh(a.x, a.z); });
 }
@@ -205,7 +214,8 @@ function mpSend(to, ev) { MP.net.set(`ev/${to}/${MP.id}_${Date.now().toString(36
 function mpEvents(list) {
   Object.entries(list || {}).forEach(([key, ev]) => {
     MP.net.del(`ev/${MP.id}/${key}`); const m = me(), by = state.actors.find(a => a.id === ev.by), E = ER(m);
-    if (ev.k === 'caught') { if (m.carry) { m.carry = null; refreshActor(m); toast(`${by ? by.name : '친구'}에게 잡혔다! 물건을 돌려줬어`, 'bad'); sfx('bad'); } return; }
+    if (ev.k === 'caught') { if (m.carry) { m.carry = null; refreshActor(m); toast(ev.auto ? '들고 있던 친구 물건은 주인에게 돌아갔어' : `${by ? by.name : '친구'}에게 잡혔다! 물건을 돌려줬어`, 'bad'); sfx('bad'); } return; }
+    if (ev.k === 'back') { gotBack(ev.part, by ? by.name : ''); return; }
     if (m.launched) return;
     let what = '';
     if (ev.k === 'hide' && m.parts[ev.part]) { delete m.parts[ev.part]; m.away[ev.part] = true; m.order = m.order.filter(q => q !== ev.part); what = `${josa(PART[ev.part].name, '이', '가')} 사라졌다!`; }
@@ -236,10 +246,22 @@ async function teacherRoom(root, room) {
   root.innerHTML = '<h1>우주의 숲 · 선생님 방</h1><div id="tstat">연결 중…</div>';
   let net; try { net = await netConnect(room, t => { $('tstat').textContent = t; }); } catch (e) { $('tstat').textContent = '연결하지 못했어요. 학교 인터넷을 확인하고 다시 열어 주세요.'; return; }
   const link = location.href.split('?')[0] + '?room=' + room;
-  let players = {}, pos = {}, reqs = {}, sky = {}, typing = false, shown = '', go = null;
-  const word = { sent: '확인 대기', ok: 'OK', back: '돌려보냄' };
+  let players = {}, pos = {}, reqs = {}, sky = {}, typing = false, hold = false, later = false, shown = '', go = null;
+  const word = { sent: '확인 대기', ok: 'OK', back: '돌려보냄' }, notes = {}; // notes: 아직 보내지 않은, 선생님이 쓰는 중인 한마디
+  // 한 번에 눌리게: 버튼을 누르는 동안(손가락·마우스가 내려가 있는 동안)과 글을 쓰는 동안에는 화면을 다시 그리지 않는다
+  root.addEventListener('pointerdown', () => { hold = true; }, true);
+  const up = () => { hold = false; if (later) setTimeout(() => { if (!hold) draw(); }, 300); };
+  addEventListener('pointerup', up, true); addEventListener('pointercancel', up, true);
+  root.addEventListener('input', e => { if (e.target.id && e.target.id.startsWith('n_')) notes[e.target.id.slice(2)] = e.target.value; });
+  root.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('button[data-id]'); if (!b) return;
+    const id = b.dataset.id, r = reqs[id]; if (!r) return;
+    const inp = $('n_' + id), note = (inp ? inp.value : notes[id] != null ? notes[id] : r.note || '').trim();
+    delete notes[id]; typing = false;
+    net.set('req/' + id, Object.assign({}, r, { status: b.dataset.s, note }));
+  });
   const draw = () => {
-    if (typing) return; const now = net.now(), all = Object.entries(players).filter(([id, p]) => p && live2(pos[id], now)), live = all.filter(([, p]) => !p.kk), kk = all.some(([, p]) => p.kk);
+    if (typing || hold) { later = true; return; } later = false; const now = net.now(), all = Object.entries(players).filter(([id, p]) => p && live2(pos[id], now)), live = all.filter(([, p]) => !p.kk), kk = all.some(([, p]) => p.kk);
     const top = Object.values(sky).filter(s => s && s.b > 0).sort((a, b) => b.b - a.b).slice(0, 10);
     const count = [0, 0, 0, 0]; live.forEach(([, p]) => { count[p.st] = (count[p.st] || 0) + 1; });
     const ids = Object.keys(reqs).sort((a, b) => (reqs[a].status === 'sent' ? 0 : 1) - (reqs[b].status === 'sent' ? 0 : 1));
@@ -255,9 +277,9 @@ async function teacherRoom(root, room) {
         return `<div class="plan"><h2>${esc(p.name)} · ${ERAS[p.stage].name} ${plan ? '탐사 계획서' : ERAS[p.stage].test.title} <span class="stamp ${p.status}">${word[p.status] || ''}</span></h2>` +
           (plan ? `임무: ${esc(p.mission)} · 우주선: ${esc(p.fields.ship || '')}<dl>` + PLAN_FIELDS.slice(1).map(f => `<dt>${f.label}</dt><dd>${esc(p.fields[f.key] || '')}</dd>`).join('') + '</dl>'
             : (p.img ? `<img src="${p.img}" style="max-width:480px;width:100%;border-radius:14px;display:block">` : '') + `<div>제목: <b>${esc(p.fields.title || '')}</b></div>`) +
-          `<div class="row"><input id="n_${id}" placeholder="학생에게 한마디" value="${esc(p.note || '')}"><button class="btn" data-id="${id}" data-s="ok">OK 도장</button><button class="btn" data-id="${id}" data-s="back">돌려보내기</button></div></div>`; }).join('');
-    root.querySelectorAll('button[data-id]').forEach(b => { b.onclick = () => { const r = reqs[b.dataset.id]; net.set('req/' + b.dataset.id, Object.assign({}, r, { status: b.dataset.s, note: $('n_' + b.dataset.id).value.trim() })); }; });
-    root.querySelectorAll('input').forEach(i => { i.onfocus = () => { typing = true; }; i.onblur = () => { typing = false; setTimeout(draw, 50); }; });
+          (p.note && p.status !== 'sent' ? `<div style="font-weight:400">보낸 한마디: ${esc(p.note)}</div>` : '') +
+          `<div class="row"><input id="n_${id}" placeholder="학생에게 한마디 (도장 · 돌려보내기 모두 전달돼요)" value="${esc(notes[id] != null ? notes[id] : p.status === 'sent' ? '' : p.note || '')}"><button class="btn" data-id="${id}" data-s="ok">OK 도장</button><button class="btn" data-id="${id}" data-s="back">돌려보내기</button></div></div>`; }).join('');
+    root.querySelectorAll('input').forEach(i => { i.onfocus = () => { typing = true; }; i.onblur = () => { typing = false; setTimeout(() => { if (!hold) draw(); }, 300); }; });
     $('tClear').onclick = () => { if (confirm('이 방의 학생 기록, 그림, 계획서를 모두 지울까요?')) ['p', 'q', 'ev', 'hid', 'req', 'fame', 'go', 'sky'].forEach(k => net.del(k)); };
     if ($('tGo')) $('tGo').onclick = () => net.set('go', net.now());
     $('tKK').onclick = () => window.open(location.pathname + '?room=' + room + '&kk=1', '_blank'); // 이 탭의 '선생님 확인'을 물려받아 암호를 다시 묻지 않는다

@@ -354,12 +354,12 @@ const FIELD_CSS = 'width:100%;box-sizing:border-box;font:inherit;font-size:18px;
 function testHtml(d) { return (d.img ? `<img src="${d.img}" style="width:100%;border-radius:16px;display:block">` : '') + `<div style="font-size:20px;margin:8px 0">제목: <b>${esc(d.title || '')}</b></div>`; }
 function teacherReview(e) { // the teacher, at the student's tablet: needs the teacher's PIN
   const m = me(), html = e === 3 ? planHtml(state.plan, m.mission.name) : testHtml(state.tests[e]);
-  ask('선생님 확인 · ' + (e === 3 ? '탐사 계획서' : ERAS[e].test.title), html + `<input id="tpin" type="password" inputmode="numeric" autocomplete="off" placeholder="선생님 암호" style="${FIELD_CSS}"><input id="tnote" placeholder="학생에게 한마디 (돌려보낼 때)" style="${FIELD_CSS}">`, [
+  ask('선생님 확인 · ' + (e === 3 ? '탐사 계획서' : ERAS[e].test.title), html + `<input id="tpin" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="선생님 암호" style="${FIELD_CSS};${PIN_CSS}"><input id="tnote" placeholder="학생에게 한마디 (돌려보낼 때)" style="${FIELD_CSS}">`, [
     { label: 'OK 도장 찍기', fn: c => decide(e, 'ok', c) },
     { label: '돌려보내기', fn: c => decide(e, 'back', c) }, { label: '닫기' }], null, true);
 }
 function decide(e, st, c) {
-  if (c.pin !== TEACHER_PIN) { toast('선생님 암호가 달라요', 'bad'); sfx('bad'); return; }
+  if (!pinOK(c.pin)) { toast('선생님 암호가 달라요', 'bad'); sfx('bad'); return; }
   setStatus('me:' + e, st, st === 'back' ? (c.note || '조금 더 구체적으로 써 보자.') : c.note); pollReq();
 }
 function chiefTalk(e) { // the gatekeeper of each early era: the story, then the test
@@ -856,9 +856,23 @@ function teacherPage() {
   const go = () => { const room = (params.get('room') || '').replace(/\D/g, ''); if (room) teacherRoom(root, room); else localTeacher(root); };
   let ok = false; try { ok = sessionStorage.getItem('sf:teacher') === '1'; } catch (e) { /* no storage: ask every time */ }
   if (ok) return go();
-  root.innerHTML = '<h1>우주의 숲 · 선생님 화면</h1><div class="plan">선생님 암호를 넣어 주세요.<div class="row"><input id="tpinPage" type="password" inputmode="numeric" placeholder="선생님 암호"><button class="btn" id="tpinGo">들어가기</button></div></div>';
-  const tryPin = () => { if ($('tpinPage').value.trim() === TEACHER_PIN) { try { sessionStorage.setItem('sf:teacher', '1'); } catch (e) { /* fine */ } go(); } else $('tpinPage').value = ''; };
-  $('tpinGo').onclick = tryPin; $('tpinPage').onkeydown = e => { if (e.key === 'Enter') tryPin(); };
+  root.innerHTML = '<h1>우주의 숲 · 선생님 화면</h1><div class="plan">선생님 암호를 넣어 주세요.<div class="row"><input id="tpinPage" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="선생님 암호" style="' + PIN_CSS + '"><button class="btn" id="tpinGo">들어가기</button></div></div>';
+  const tryPin = () => { if (pinOK($('tpinPage').value)) { $('tpinPage').blur(); /* 선생님 화면은 입력 칸에 커서가 있으면 다시 그리지 않는다 */ try { sessionStorage.setItem('sf:teacher', '1'); } catch (e) { /* fine */ } go(); } else $('tpinPage').value = ''; };
+  $('tpinGo').onclick = tryPin; $('tpinPage').onkeydown = e => { if (e.key === 'Enter') setTimeout(tryPin, 30); }; // 한글 조합 중 Enter: 글자가 끝난 뒤에 확인
+}
+// 방 열기: 1000~9999 중 아무 번호나 고르되, 이미 누가 쓰는 방이면 다른 번호로 (서버에 못 물어보면 그냥 그 번호로)
+async function openRandomRoom() {
+  const b = $('openRoom'); if (b) { b.disabled = true; b.textContent = '방 번호 고르는 중…'; }
+  let r = 0;
+  for (let i = 0; i < 6; i++) {
+    r = 1000 + Math.floor(Math.random() * 9000); // 방 번호는 게임 판이 아니므로 rng() 를 쓰지 않는다
+    try {
+      const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 4000);
+      const res = await fetch(`${FIREBASE.databaseURL}/rooms/forest_${r}.json?shallow=true`, { signal: ctl.signal }); clearTimeout(t);
+      if (res.ok && (await res.json()) === null) break; // 빈 방
+    } catch (e) { break; } // 학교망이 막아도 방은 연다
+  }
+  location.href = location.pathname + '?teacher=1&room=' + r;
 }
 function localTeacher(root) {
   let seen = '';
@@ -866,14 +880,14 @@ function localTeacher(root) {
     const raw = JSON.stringify(loadPlans()); if (raw === seen || (document.activeElement && document.activeElement.tagName === 'INPUT')) return; seen = raw;
     const all = loadPlans(), word = { sent: '확인 대기', ok: 'OK', back: '돌려보냄', none: '작성 중' };
     const ids = Object.keys(all).filter(id => all[id] && all[id].kind).sort((a, b) => (all[a].status === 'sent' ? 0 : 1) - (all[b].status === 'sent' ? 0 : 1) || all[b].stage - all[a].stage);
-    root.innerHTML = '<h1>우주의 숲 · 선생님 화면</h1><div class="plan">반 전체가 함께 하려면 방을 여세요. <div class="row"><input id="newRoom" inputmode="numeric" maxlength="6" placeholder="방 번호 (숫자 4자리)" value="' + (1000 + Math.floor(Math.random() * 9000)) + '"><button class="btn" id="openRoom">이 번호로 방 열기</button></div></div><div>혼자 하기(봇과 함께)로 낸 것은 아래에 보여요. 석기 · 철기 · 산업 시대의 그림과 우주 시대 탐사 계획서를 보고 OK를 눌러 주세요. OK가 나면 학생 섬의 시간의 포탈이 열립니다. 이 화면은 같은 기기, 같은 브라우저에서 낸 것만 보여 줍니다. 학생 기기에서 바로 OK할 때의 암호는 data.js의 TEACHER_PIN입니다.</div>' +
+    root.innerHTML = '<h1>우주의 숲 · 선생님 화면</h1><div class="plan">반 전체가 함께 하려면 방을 여세요. 방 번호(4자리)는 저절로 정해집니다. <div class="row"><button class="btn" id="openRoom">방 열기</button></div></div><div>혼자 하기(봇과 함께)로 낸 것은 아래에 보여요. 석기 · 철기 · 산업 시대의 그림과 우주 시대 탐사 계획서를 보고 OK를 눌러 주세요. OK가 나면 학생 섬의 시간의 포탈이 열립니다. 이 화면은 같은 기기, 같은 브라우저에서 낸 것만 보여 줍니다. 학생 기기에서 바로 OK할 때도 이 화면과 같은 선생님 암호를 씁니다.</div>' +
       (ids.length ? '' : '<div class="plan">아직 제출된 시험지나 계획서가 없습니다.</div>') + ids.map(id => { const p = all[id], plan = p.kind === 'plan';
         return `<div class="plan"><h2>${esc(p.name)} · ${ERAS[p.stage].name} ${plan ? '탐사 계획서' : ERAS[p.stage].test.title} <span class="stamp ${p.status}">${word[p.status]}</span></h2>` +
           (plan ? `임무: ${esc(p.mission)} · 우주선: ${esc(p.fields.ship || '')}<dl>` + PLAN_FIELDS.slice(1).map(f => `<dt>${f.label}</dt><dd>${esc(p.fields[f.key] || '')}</dd>`).join('') + '</dl>'
             : (p.img ? `<img src="${p.img}" style="max-width:480px;width:100%;border-radius:14px;display:block">` : '') + `<div>제목: <b>${esc(p.fields.title || '')}</b></div>`) +
           `<div class="row"><input id="n_${id}" placeholder="학생에게 한마디" value="${esc(p.note || '')}"><button class="btn" data-id="${id}" data-s="ok">OK 도장</button><button class="btn" data-id="${id}" data-s="back">돌려보내기</button></div></div>`; }).join('');
     root.querySelectorAll('button[data-id]').forEach(b => { b.onclick = () => { setStatus(b.dataset.id, b.dataset.s, $('n_' + b.dataset.id).value.trim()); seen = ''; draw(); }; });
-    $('openRoom').onclick = () => { const r = $('newRoom').value.replace(/\D/g, ''); if (r) location.href = location.pathname + '?teacher=1&room=' + r; };
+    $('openRoom').onclick = openRandomRoom;
   };
   draw(); setInterval(draw, 1000); addEventListener('storage', draw);
 }

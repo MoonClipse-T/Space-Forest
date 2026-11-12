@@ -179,4 +179,8 @@ const ERAS = [
 ];
 // Each early era's chief stands by its portal and gives the test.
 const CHIEF_SPOT = e => ({ x: -5, z: PORTAL[e].z + 4 });
-const TEACHER_PIN = '1004'; // 학생 기기에서 선생님이 OK를 누를 때 쓰는 암호 (바꿔 쓰세요)
+const TEACHER_PIN = '교사'; // 선생님 화면 · 학생 기기에서 선생님이 OK를 누를 때 쓰는 암호 (바꿔 쓰세요)
+// 한글 암호: 띄어쓰기는 무시하고, 자모가 나뉘어 들어와도(NFD) 같은 글자로 본다
+const pinOK = v => String(v || '').normalize('NFC').replace(/\s/g, '') === TEACHER_PIN;
+// 암호 칸: type=password 는 안드로이드(디벗)에서 한글 자판이 막히므로 글자 칸에 점으로만 가린다
+const PIN_CSS = '-webkit-text-security:disc;text-security:disc';

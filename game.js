@@ -614,7 +614,13 @@ function start() {
   if ($('bStart').disabled) return; // already joining
   if (!room) { reset(); setScene('play'); sfx('ok'); return; }
   const msg = $('joinMsg'), b = $('bStart'); b.disabled = true; msg.textContent = '연결 중…';
-  mpJoin(room, t => { msg.textContent = t; }).then(mode => { setScene('play'); sfx('ok'); toast(`${room}번 방에 들어왔어! (${mode === 'rest' ? '직접 연결' : '실시간 연결'}) 반 친구들과 함께 시간 여행 시작`, 'good'); })
+  mpJoin(room, t => { msg.textContent = t; }).then(mode => {
+    let beat = 0; // 기다리는 동안에도 '들어왔어요' 신호를 보내 선생님 방에 이름이 보이게
+    const go = () => { clearInterval(beat); msg.textContent = ''; setScene('play'); sfx('ok'); toast(`${room}번 방 · 출발! (${mode === 'rest' ? '직접 연결' : '실시간 연결'}) 반 친구들과 함께 시간 여행 시작`, 'good'); };
+    if (MP.go) return go(); // 이미 시작한 방(늦게 온 친구 · 새로고침)은 바로
+    msg.textContent = `${room}번 방에 들어왔어! 선생님이 [다같이 시작]을 누르면 모두 함께 출발해요.`; sfx('blip');
+    beat = setInterval(mpTick, 500); MP.onGo = go;
+  })
     .catch(e => { console.warn('join', e && e.message); b.disabled = false; msg.textContent = (e && e.message === 'block' ? '학교 인터넷이 게임 서버를 막고 있어요.' : '게임 서버가 대답하지 않아요.') + ' [시작]을 한 번 더 눌러 보거나, 방 번호를 비우고 혼자 해 보세요.'; });
 }
 function setZoom(dir) { zoom = Math.max(tune.zoom_min, Math.min(tune.zoom_max, zoom * Math.pow(tune.zoom_step, dir))); if (Math.abs(zoom - 1) < 0.12) zoom = 1; }

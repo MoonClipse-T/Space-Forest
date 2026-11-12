@@ -27,8 +27,8 @@ window.CONFIG = {
 
   // Mini-games before the space age
   stair_goal: { value: 100, min: 10, max: 300, step: 10 },       // 첨성대 꼭대기까지 계단 수
-  stair_drain: { value: 0.15, min: 0.05, max: 0.6, step: 0.01 }, // 처음에 시간 막대가 1초에 줄어드는 양 (꽉 참 = 1)
-  stair_drain_up: { value: 0.2, min: 0, max: 0.6, step: 0.01 },  // 꼭대기에 다가갈수록 더 빨리 줄어드는 양
+  stair_drain: { value: 0.14, min: 0.05, max: 0.6, step: 0.01 }, // 처음에 시간 막대가 1초에 줄어드는 양 (꽉 참 = 1) · 11-12 0.15 → 0.14
+  stair_drain_up: { value: 0.18, min: 0, max: 0.6, step: 0.01 }, // 꼭대기에 다가갈수록 더 빨리 줄어드는 양 · 11-12 0.2 → 0.18
   stair_refill: { value: 0.07, min: 0.02, max: 0.3, step: 0.01 }, // 한 칸 오를 때 채워지는 양
   stair_turn: { value: 0.38, min: 0.1, max: 0.7, step: 0.02 },   // 계단이 꺾일 확률
   train_need: { value: 3, min: 1, max: 6, step: 1 },              // 기차 셈 문제를 몇 번 맞혀야 하나

@@ -120,6 +120,7 @@ async function mpJoin(room, say) {
   net.onKids('hid', mpHidden);
   net.on('req/' + id, r => { MP.req = r; if (r && r.stage === me().stage) applyReq(r); });
   net.onKids('fame', f => { MP.fame = f || {}; });
+  net.on('go', v => { MP.go = v; if (v && MP.onGo) { const f = MP.onGo; MP.onGo = null; f(); } }); // 선생님이 [다같이 시작]을 누른 시각
   return net.mode;
 }
 function mpRestore(m, p, q) { // a tablet that reloads comes back where it was, with what it had made
@@ -230,7 +231,7 @@ async function teacherRoom(root, room) {
   root.innerHTML = '<h1>우주의 숲 · 선생님 방</h1><div id="tstat">연결 중…</div>';
   let net; try { net = await netConnect(room, t => { $('tstat').textContent = t; }); } catch (e) { $('tstat').textContent = '연결하지 못했어요. 학교 인터넷을 확인하고 다시 열어 주세요.'; return; }
   const link = location.href.split('?')[0] + '?room=' + room;
-  let players = {}, pos = {}, reqs = {}, typing = false, shown = '';
+  let players = {}, pos = {}, reqs = {}, typing = false, shown = '', go = null;
   const word = { sent: '확인 대기', ok: 'OK', back: '돌려보냄' };
   const draw = () => {
     if (typing) return; const now = net.now(), live = Object.entries(players).filter(([id, p]) => p && live2(pos[id], now));
@@ -240,7 +241,8 @@ async function teacherRoom(root, room) {
       <div style="word-break:break-all">학생들은 게임 첫 화면의 "방 번호"에 <b>${esc(room)}</b> 을 쓰거나 이 주소로 들어와요: <b>${esc(link)}</b></div>
       <div class="plan">지금 들어온 학생 ${live.length}명 · 석기 ${count[0]} · 철기 ${count[1]} · 산업 ${count[2]} · 우주 ${count[3]} · 발사 ${live.filter(([, p]) => p.la).length}
       <div style="font-weight:400;margin-top:6px">${live.map(([, p]) => `${esc(p.n)}(${ERAS[p.st].name.slice(0, 2)}${p.la ? '·발사' : ''})`).join(' · ') || '아직 아무도 없어요'}</div>
-      <div class="row"><button class="btn" id="tClear">방 비우기 (새 수업 시작)</button></div></div>` +
+      <div class="row">${go ? `<span class="stamp ok">출발함 · ${new Date(go).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</span>` : '<button class="btn" id="tGo" style="background:#ffd166;font-size:22px">다같이 시작</button><span style="align-self:center">학생들은 이 버튼을 누를 때까지 첫 화면에서 기다려요</span>'}
+      <button class="btn" id="tClear">방 비우기 (새 수업 시작)</button></div></div>` +
       (ids.length ? '' : '<div class="plan">아직 제출된 그림이나 계획서가 없어요.</div>') + ids.map(id => { const p = reqs[id], plan = p.kind === 'plan';
         return `<div class="plan"><h2>${esc(p.name)} · ${ERAS[p.stage].name} ${plan ? '탐사 계획서' : ERAS[p.stage].test.title} <span class="stamp ${p.status}">${word[p.status] || ''}</span></h2>` +
           (plan ? `임무: ${esc(p.mission)} · 우주선: ${esc(p.fields.ship || '')}<dl>` + PLAN_FIELDS.slice(1).map(f => `<dt>${f.label}</dt><dd>${esc(p.fields[f.key] || '')}</dd>`).join('') + '</dl>'
@@ -248,8 +250,10 @@ async function teacherRoom(root, room) {
           `<div class="row"><input id="n_${id}" placeholder="학생에게 한마디" value="${esc(p.note || '')}"><button class="btn" data-id="${id}" data-s="ok">OK 도장</button><button class="btn" data-id="${id}" data-s="back">돌려보내기</button></div></div>`; }).join('');
     root.querySelectorAll('button[data-id]').forEach(b => { b.onclick = () => { const r = reqs[b.dataset.id]; net.set('req/' + b.dataset.id, Object.assign({}, r, { status: b.dataset.s, note: $('n_' + b.dataset.id).value.trim() })); }; });
     root.querySelectorAll('input').forEach(i => { i.onfocus = () => { typing = true; }; i.onblur = () => { typing = false; setTimeout(draw, 50); }; });
-    $('tClear').onclick = () => { if (confirm('이 방의 학생 기록, 그림, 계획서를 모두 지울까요?')) ['p', 'q', 'ev', 'hid', 'req', 'fame'].forEach(k => net.del(k)); };
+    $('tClear').onclick = () => { if (confirm('이 방의 학생 기록, 그림, 계획서를 모두 지울까요?')) ['p', 'q', 'ev', 'hid', 'req', 'fame', 'go'].forEach(k => net.del(k)); };
+    if ($('tGo')) $('tGo').onclick = () => net.set('go', net.now());
   };
+  net.on('go', v => { go = v; draw(); });
   const live2 = live;
   net.onKids('p', p => { players = p || {}; draw(); });
   net.onKids('q', q => { pos = q || {}; const n = Object.keys(pos).filter(id => live(pos[id], net.now())).join(); if (n !== shown) { shown = n; draw(); } }); // 위치는 자주 오니, 들어오고 나간 사람이 바뀔 때만 다시 그림

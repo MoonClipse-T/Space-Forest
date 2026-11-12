@@ -55,35 +55,37 @@ const SHOPS = [
 // group: suit (worn), ship (on the rocket), cargo (beside the rocket).
 const PARTS = [
   // 우주 시대 이전: 재미로. kind 'word' = 답을 써서 맞히는 넌센스, 'num' = 숫자를 써서 맞히는 상식(틀리면 업·다운 힌트),
-  // 'knap' = 돌을 깨서 도끼 날 만들기, 'scope' = 망원경 속 틀린 그림 찾기. (교과서 문제는 우주 시대에서)
+  // 'nono' = 네모네모 로직으로 뗀석기 칠하기, 'moon' = 달 모양 이름 쓰기, 'stairs' = 첨성대 계단 오르기,
+  // 'scope' = 망원경 속 틀린 그림 찾기, 'train' = 기차에 남은 사람 세기. (교과서 문제는 우주 시대에서)
+  // 단답은 오차 없이 딱 맞아야 정답 (숫자는 17000 · 17,000 · 1만 7천처럼 쓰는 법만 너그럽게)
   { id: 'st_fire', era: 0, group: 'era', name: '모닥불', item: '부싯돌', shop: 'flint', kind: 'word',
     q: '[넌센스] 세상에서 가장 뜨거운 바다는? (세 글자)', ans: ['열바다', '열받아'], hint: '화가 나면 머리에서 김이 나지… "열○○"',
     fact: '열~바다! 열받아! 크크. 자, 불꽃 튀는 부싯돌 받아 가.' },
-  { id: 'st_axe', era: 0, group: 'era', name: '돌도끼', item: '뗀석기 돌날', shop: 'knap', kind: 'knap',
-    q: '큰 돌을 톡톡 깨서 점선 모양의 도끼 날을 만들어 봐! 점선 안쪽은 깨지 않게 조심.',
-    fact: '오, 솜씨 좋은데? 이렇게 돌을 깨서 만든 도구가 뗀석기야.' },
+  { id: 'st_axe', era: 0, group: 'era', name: '돌도끼', item: '뗀석기 돌날', shop: 'knap', kind: 'nono',
+    q: '네모네모 로직! 줄마다 적힌 숫자만큼 칸을 이어 칠하면 돌 속에 숨은 뗀석기가 나와.',
+    fact: '짠, 주먹도끼! 돌을 깨서 날을 세운 이런 도구가 뗀석기야.' },
   { id: 'st_wall', era: 0, group: 'era', name: '하늘 벽화', item: '황토 물감', shop: 'ochre', kind: 'num',
-    q: '프랑스 라스코 동굴 벽화는 약 몇 년 전에 그려졌을까?', ans: 17000, tol: 3000, unit: '년 전',
-    fact: '약 1만 7천 년 전! 들소와 말이 아직도 생생하게 남아 있대.' },
+    q: '프랑스 라스코 동굴 벽화는 약 몇 년 전에 그려졌을까?', ans: 17000, unit: '년 전',
+    fact: '1만 7천 년 전! 들소와 말이 아직도 생생하게 남아 있대.' },
   // 철기 시대
   { id: 'ir_tool', era: 1, group: 'era', name: '쇠 낫', item: '쇳덩이', shop: 'smith', kind: 'word',
-    q: '[넌센스] 대장간 화로처럼 세상에서 가장 뜨거운 과일은?', ans: ['천도복숭아', '천도'], hint: '온도는 "도"로 재지. 아주아주 뜨거운 ○○복숭아!',
+    q: '[넌센스] 대장간 화로처럼 세상에서 가장 뜨거운 과일은?', ans: ['천도복숭아'], hint: '온도는 "도"로 재지. 아주아주 뜨거운 ○○복숭아!',
     fact: '천 도(度) 복숭아! 쇠를 녹이려면 천 도보다 훨씬 뜨거워야 해.' },
-  { id: 'ir_cal', era: 1, group: 'era', name: '돌 달력', item: '볍씨 자루', shop: 'farm', kind: 'num',
-    q: '보름달이 뜬 날부터 다음 보름달까지는 약 며칠일까?', ans: 29.5, tol: 1, unit: '일',
-    fact: '약 29.5일! 그래서 옛 달력의 한 달은 29일이나 30일이었어.' },
-  { id: 'ir_tower', era: 1, group: 'era', name: '작은 첨성대', item: '다듬은 돌', shop: 'mason', kind: 'num',
-    q: '첨성대를 쌓은 돌은 몇 개쯤일까?', ans: 362, tol: 12, unit: '개',
-    fact: '약 362개! 일 년의 날수와 비슷하다는 재미있는 이야기도 있어.' },
+  { id: 'ir_cal', era: 1, group: 'era', name: '돌 달력', item: '볍씨 자루', shop: 'farm', kind: 'moon',
+    q: '1학년 때 배운 달, 기억나? 오늘 밤 달의 모양 이름을 써 봐!',
+    fact: '삭 → 초승 → 상현 → 망 → 하현 → 그믐. 옛사람들은 달 모양으로 날짜를 셌어.' },
+  { id: 'ir_tower', era: 1, group: 'era', name: '작은 첨성대', item: '다듬은 돌', shop: 'mason', kind: 'stairs',
+    q: '첨성대 꼭대기까지 돌계단 100칸! 계단이 꺾이는 방향을 잘 보고 올라가 봐.',
+    fact: '꼭대기 도착! 신라 사람들은 첨성대에서 별을 살폈다고 해.' },
   // 산업 시대: 망원경, 기차, 비행기
   { id: 'in_scope', era: 2, group: 'era', name: '망원경', item: '볼록 렌즈', shop: 'lens', kind: 'scope',
     q: '망원경으로 두 밤하늘을 비교해 봐. 다른 곳 네 군데를 찾으면 렌즈를 줄게!',
     fact: '눈썰미 최고! 갈릴레이도 이렇게 꼼꼼히 보다가 목성의 위성 넷을 찾았어.' },
-  { id: 'in_steam', era: 2, group: 'era', name: '증기 기관차', item: '톱니바퀴', shop: 'steam', kind: 'word',
-    q: '[넌센스] 칙칙폭폭 기차보다 훨씬 빠른 새는? (힌트 단어: 눈)', ans: ['눈깜짝할새', '눈깜빡할새', '눈깜짝새'], hint: '눈을 감았다 뜨는 그 짧은 동안을 뭐라고 하지?',
-    fact: '눈 깜짝할 새! 하하. 기차는 그보단 느려도 석탄 힘으로 쭉쭉 달려.' },
+  { id: 'in_steam', era: 2, group: 'era', name: '증기 기관차', item: '톱니바퀴', shop: 'steam', kind: 'train',
+    q: '칙칙폭폭! 역마다 타고 내리는 사람을 잘 세어 봐. 마지막에 기차에 남은 사람은 몇 명? 세 번 맞히면 톱니바퀴를 줄게.',
+    fact: '셈 박사네! 기차가 생기고 사람과 물건이 훨씬 멀리, 많이 오갔어.' },
   { id: 'in_plane', era: 2, group: 'era', name: '비행기', item: '프로펠러', shop: 'rocketlab', kind: 'num',
-    q: '1903년 라이트 형제의 첫 비행은 몇 초 동안 날았을까?', ans: 12, tol: 2, unit: '초',
+    q: '1903년 라이트 형제의 첫 비행은 몇 초 동안 날았을까?', ans: 12, unit: '초',
     fact: '겨우 12초! 그래도 사람이 기계를 타고 처음 하늘을 난 순간이야. 다음은… 우주!' },
   // 우주 시대
   { id: 'suit', group: 'suit', name: '우주복 몸체', item: '기능성 옷감', shop: 'cloth',
@@ -163,7 +165,8 @@ const ERAS = [
   { id: 'iron', name: '철기 시대', when: '약 2,500년 전', motto: '하늘을 읽어 농사를 짓다', ground: 0xcdeaa8,
     chief: '선생님', work: '관측 마당',
     intro: ['어서 와, 철기 마을이야! 이 마을에선 내가 선생님이지. 에헴.', '쇠 낫을 벼리고, 돌 달력을 만들고, 작은 첨성대를 쌓아 와.', '다 되면 그림 시험이 있어. 문제는… 비밀! 선생님 OK가 나면 산업 시대로 가는 포탈이 열려.'],
-    test: { title: '선생님 얼굴 그리기', paper: 'hanji', ask: '시험 문제는 바로… 선생님 얼굴 그리기! 닮게 그릴수록 OK 받기 쉽겠지?', ph: '예: 우리 선생님 웃는 얼굴' },
+    // 문제는 시험지를 펼칠 때 처음 공개 (그전에는 pub 만 보인다)
+    test: { title: '선생님 얼굴 그리기', pub: '비밀 그림 시험', paper: 'hanji', reveal: ['두구두구두구…', '철기 마을 그림 시험 문제는 바로…!'], ask: '선생님 얼굴 그리기! 닮게 그릴수록 OK 받기 쉽겠지?', ph: '예: 우리 선생님 웃는 얼굴' },
     loose: { act: '풀무 바람 빼기', done: '화로 불이 식어 버렸다!', fix: '풀무 밟기', game: '풀무 쿵! 초록 칸에서 밟기', fixed: '화로가 다시 벌겋게 달았다!', need: 'ir_tool', already: '이미 화로가 식어 있어', check: '식은 화로' },
     doodle: { act: '녹물 칠하기', done: '돌 달력에 녹물이 번졌다!', fix: '녹물 닦기', fixed: '달력이 깨끗해졌다!', on: 'ir_cal', already: '이미 녹물투성이야', none: '칠할 달력이 없어', check: '녹물 번진 달력', color: 0xc0602a } },
   { id: 'steam', name: '산업 시대', when: '약 100~300년 전', motto: '망원경과 기차, 하늘을 나는 꿈', ground: 0xd9d2e6,
@@ -179,8 +182,33 @@ const ERAS = [
 ];
 // Each early era's chief stands by its portal and gives the test.
 const CHIEF_SPOT = e => ({ x: -5, z: PORTAL[e].z + 4 });
+
+// 달의 위상 (북반구에서 본 모양). lit: 밝은 쪽 (+1 오른쪽, -1 왼쪽), k: 밝은 부분 (0 = 안 보임 ~ 1 = 꽉 참)
+const MOON_PHASES = [
+  { name: '삭', ans: ['삭', '삭월', '신월'], lit: 1, k: 0, say: '해와 같은 쪽에 있어서 밝은 면이 보이지 않아.' },
+  { name: '초승달', ans: ['초승', '초승달'], lit: 1, k: 0.2, say: '저녁 서쪽 하늘에 오른쪽이 가늘게 빛나.' },
+  { name: '상현달', ans: ['상현', '상현달'], lit: 1, k: 0.5, say: '오른쪽 반이 밝은 반달이야.' },
+  { name: '망(보름달)', ans: ['망', '보름', '보름달', '망월'], lit: 1, k: 1, say: '둥근 달 전체가 밝아.' },
+  { name: '하현달', ans: ['하현', '하현달'], lit: -1, k: 0.5, say: '왼쪽 반이 밝은 반달이야.' },
+  { name: '그믐달', ans: ['그믐', '그믐달'], lit: -1, k: 0.2, say: '새벽 동쪽 하늘에 왼쪽이 가늘게 빛나.' },
+];
+// 뗀석기 네모네모 로직 (9 × 10, 줄마다 한 덩어리라 차근차근 풀면 답이 하나로 정해진다)
+const NONO_AXE = [
+  '....#....',
+  '...###...',
+  '...###...',
+  '..#####..',
+  '..#####..',
+  '.#######.',
+  '.#######.',
+  '.#######.',
+  '..#####..',
+  '...###...',
+];
 const TEACHER_PIN = '교사'; // 선생님 화면 · 학생 기기에서 선생님이 OK를 누를 때 쓰는 암호 (바꿔 쓰세요)
-// 한글 암호: 띄어쓰기는 무시하고, 자모가 나뉘어 들어와도(NFD) 같은 글자로 본다
-const pinOK = v => String(v || '').normalize('NFC').replace(/\s/g, '') === TEACHER_PIN;
+// 한글 암호: 띄어쓰기 · 대소문자는 무시하고, 자모가 나뉘어 들어와도(NFD) 같은 글자로 본다.
+// 자판이 영어로 되어 있어도 같은 자리를 누르면 통과 (두벌식: 교사 = r y t k)
+const TEACHER_PIN_EN = 'rytk';
+const pinOK = v => { const s = String(v || '').normalize('NFC').replace(/\s/g, ''); return s === TEACHER_PIN || s.toLowerCase() === TEACHER_PIN_EN; };
 // 암호 칸: type=password 는 안드로이드(디벗)에서 한글 자판이 막히므로 글자 칸에 점으로만 가린다
 const PIN_CSS = '-webkit-text-security:disc;text-security:disc';

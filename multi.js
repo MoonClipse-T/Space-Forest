@@ -14,13 +14,18 @@ const FIREBASE = { // not a secret: a web app's Firebase settings are public by 
   messagingSenderId: '984441301984',
   appId: '1:984441301984:web:5f13cb2fbf4232e9291985',
 };
-const MP = { on: false, net: null, id: '', room: '', slot: 0, players: {}, req: null, fame: {}, sent: '', sentAt: 0, nextSend: 0, first: true };
+const MP = { on: false, net: null, id: '', room: '', slot: 0, players: {}, pos: {}, req: null, fame: {}, sent: '', sentAt: 0, nextSend: 0, sentPos: '', posAt: 0, nextPos: 0, nextSync: 0, first: true };
+// 반 전체(30대)가 한 방에: 자주 바뀌는 위치(q/<id>, 짧은 배열)와 가끔 바뀌는 상태(p/<id>)를 나눠 보낸다.
+// 예전처럼 상태 전체를 1초에 4~5번 보내면 30대에서 한 시간에 3 GB 가까이 오가서 무료 한도(한 달 10 GB, 별 파티 · 스타-윙또와 같이 씀)를 넘길 수 있다.
+const POS_EVERY = 350, POS_BEAT = 5000, STATE_BEAT = 20000; // ms: 움직일 때 위치 간격 · 서 있을 때 살아 있다는 신호 · 상태 다시 보내기
 
 // ---- The connection (from Star-Wingtto's racenet.js): web socket → long polling → plain https ------------
 const NET_LOCAL = /[?&]local\b/.test(location.search);
 const within = (p, ms, code) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error(code)), ms))]);
 const nflag = (k, v) => { try { if (v === undefined) return localStorage.getItem(k) === '1'; localStorage.setItem(k, '1'); } catch (e) { return false; } };
-const ndec = v => (typeof v === 'string' ? JSON.parse(v) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, ndec(x)])) : null);
+// 저장된 값 → 원래 값. 폴더({id: JSON 글})도 풀어 준다(스타-윙또 2026-10-27 의 '이미 누가 있는 방에 못 들어가던' 원인).
+// 망가진 글 하나가 섞여 있어도 그것만 빼고 읽는다 — 한 대 때문에 반 전체가 못 들어오는 일이 없게
+const ndec = v => { if (typeof v === 'string') { try { return JSON.parse(v); } catch (e) { return null; } } return v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, ndec(x)])) : null; };
 async function netConnect(room, stage = () => {}) {
   const base = `rooms/forest_${room}`;
   if (!NET_LOCAL) {
@@ -54,7 +59,7 @@ async function sdkNet(base, stage) {
   const r = p => fb.ref(db, `${base}/${p}`), val = s => (s.exists() ? ndec(s.val()) : null);
   let off = 0; fb.onValue(fb.ref(db, '.info/serverTimeOffset'), s => { off = s.val() || 0; });
   return {
-    mode: 'online', now: () => Date.now() + off,
+    mode: 'online', now: () => Date.now() + off, close: () => fb.goOffline(db),
     set: (p, v) => fb.set(r(p), JSON.stringify(v)), del: p => fb.remove(r(p)),
     on: (p, cb) => fb.onValue(r(p), s => cb(val(s))),
     onKids: (p, cb) => fb.onValue(r(p), s => { const o = {}; s.forEach(c => { try { o[c.key] = JSON.parse(c.val()); } catch (e) { /* skip a bad value */ } }); cb(o); }),
@@ -93,23 +98,32 @@ async function restNet(base, stage) {
 // ---- Joining a room ------------------------------------------------------------------------------------
 const STALE = 45000; // a tablet silent this long has left the room
 function myId() { try { let id = sessionStorage.getItem('sf:id'); if (!id) { id = 'k' + Math.random().toString(36).slice(2, 9); sessionStorage.setItem('sf:id', id); } return id; } catch (e) { return 'k' + Math.random().toString(36).slice(2, 9); } }
+const live = (q, now) => Array.isArray(q) && now - q[4] < STALE; // q = [x, z, 보는 방향, 걷는 중, 보낸 시각]
 async function mpJoin(room, say) {
-  const net = await netConnect(room, say); say('방에 들어가는 중…');
-  const now = net.now(), all = (await net.get('p')) || {}, id = myId(), mine = all[id];
-  const used = new Set(Object.entries(all).filter(([k, p]) => k !== id && p && now - p.t < STALE).map(([, p]) => p.sl));
+  let net = await netConnect(room, say), all, pos;
+  const read = async n => { say('방에 들어가는 중…'); return Promise.all([n.get('p'), n.get('q')]); };
+  try { [all, pos] = await read(net); } catch (e) { // 실시간 연결은 됐는데 방을 못 읽으면: 직접 연결로 한 번 더
+    if (net.mode !== 'online') throw e;
+    console.warn('forest read', e.message); if (net.close) net.close();
+    say('다른 길로 다시 들어가는 중…'); net = await restNet(`rooms/forest_${room}`, say); nflag('forest:rest', 1); [all, pos] = await read(net);
+  }
+  all = all || {}; pos = pos || {};
+  const now = net.now(), id = myId(), mine = all[id];
+  const used = new Set(Object.keys(all).filter(k => k !== id && all[k] && live(pos[k], now)).map(k => all[k].sl));
   let slot = mine ? mine.sl : 0; while (!mine && used.has(slot) && slot < 29) slot++;
-  Object.assign(MP, { on: true, net, id, room, slot, players: {}, req: null, fame: {}, sent: '', nextSend: 0, first: true });
+  Object.assign(MP, { on: true, net, id, room, slot, players: {}, pos: {}, req: null, fame: {}, sent: '', nextSend: 0, sentPos: '', nextPos: 0, first: true });
   reset(); // only me: the classmates come in as they are seen
-  const m = me(); if (mine) mpRestore(m, mine);
-  net.onKids('p', mpPlayers);
+  const m = me(); if (mine) mpRestore(m, mine, pos[id]);
+  net.onKids('p', p => { MP.players = p || {}; mpSync(); });
+  net.onKids('q', mpPos);
   net.onKids('ev/' + id, mpEvents);
   net.onKids('hid', mpHidden);
   net.on('req/' + id, r => { MP.req = r; if (r && r.stage === me().stage) applyReq(r); });
   net.onKids('fame', f => { MP.fame = f || {}; });
   return net.mode;
 }
-function mpRestore(m, p) { // a tablet that reloads comes back where it was, with what it had made
-  m.x = p.x; m.z = p.z; m.h = gh(m.x, m.z); m.stage = p.st || 0; m.mission = MISSIONS.find(q => q.id === p.mi) || null;
+function mpRestore(m, p, q) { // a tablet that reloads comes back where it was, with what it had made
+  if (Array.isArray(q)) { m.x = q[0]; m.z = q[1]; } else if (p.x != null) { m.x = p.x; m.z = p.z; } m.h = gh(m.x, m.z); m.stage = p.st || 0; m.mission = MISSIONS.find(q => q.id === p.mi) || null;
   (p.pa || '').split(',').filter(Boolean).forEach(k => { m.parts[k] = true; }); m.order = (p.or || '').split(',').filter(Boolean);
   m.planStatus = p.ps === 'ok' ? 'ok' : 'none'; for (let e = 0; e <= Math.min(2, m.stage); e++) state.met[e] = true;
   state.seenEra = zoneOf(m.z) - 1; placeWork(m); refreshActor(m); lookAtSpot(m.x, m.z, tune.cam_height, tune.cam_back, true);
@@ -117,31 +131,46 @@ function mpRestore(m, p) { // a tablet that reloads comes back where it was, wit
 
 // ---- What my tablet tells the room, a few times a second ------------------------------------------------
 function mpTick() {
-  if (!MP.on) return; const t = performance.now(); if (t < MP.nextSend) return; MP.nextSend = t + 220;
-  const m = me(), r1 = v => Math.round(v * 10) / 10;
-  const snap = { n: m.name, c: SHIRTS.indexOf(m.shirt), sl: MP.slot, x: r1(m.x), z: r1(m.z), f: Math.round(m.face * 100) / 100, mv: m.moving ? 1 : 0, st: m.stage,
+  if (!MP.on) return; const t = performance.now(), m = me(), r1 = v => Math.round(v * 10) / 10;
+  if (t >= MP.nextPos) { // where I am: a short array, a few times a second while I walk, a heartbeat while I stand
+    const pos = [r1(m.x), r1(m.z), Math.round(m.face * 100) / 100, m.moving ? 1 : 0], ps = JSON.stringify(pos);
+    if (ps !== MP.sentPos || t - MP.posAt > POS_BEAT) { MP.sentPos = ps; MP.posAt = t; MP.nextPos = t + POS_EVERY; MP.net.set('q/' + MP.id, pos.concat(MP.net.now())); }
+  }
+  if (t >= MP.nextSync) { MP.nextSync = t + 2000; mpSync(); } // classmates who went quiet leave the island
+  if (t < MP.nextSend) return; MP.nextSend = t + 250;
+  const snap = { n: m.name, c: SHIRTS.indexOf(m.shirt), sl: MP.slot, st: m.stage, // what I am: only when it changes
     pa: Object.keys(m.parts).join(','), or: m.order.join(','), lo: m.loose ? 1 : 0, dd: m.doodle ? 1 : 0, ca: m.carry ? m.carry.owner + '|' + m.carry.part : '',
     la: m.launched ? 1 : 0, se: (m.stage < 3 ? m.testStatus : m.planStatus) === 'sent' ? 1 : 0, ps: m.planStatus, sd: state.t < m.shieldUntil ? 1 : 0, mi: m.mission ? m.mission.id : '' };
   const s = JSON.stringify(snap);
-  if (s === MP.sent && t - MP.sentAt < 4000) return; // nothing new: a heartbeat every few seconds is enough
+  if (s === MP.sent && t - MP.sentAt < STATE_BEAT) return;
   MP.sent = s; MP.sentAt = t; snap.t = MP.net.now(); MP.net.set('p/' + MP.id, snap);
 }
 
-// ---- Classmates: shown as they move, built when they first appear --------------------------------------------
-function mpPlayers(all) {
-  const now = MP.net.now(), seen = new Set();
+// ---- Classmates: positions arrive often and only move them; who they are arrives rarely and builds them ----
+function mpPos(all) {
+  MP.pos = all || {}; const now = MP.net.now(); let changed = false;
+  Object.entries(MP.pos).forEach(([id, q]) => {
+    if (id === MP.id || !Array.isArray(q)) return; const a = state.actors.find(x => x.id === id);
+    if (!a) { if (MP.players[id] && live(q, now)) changed = true; return; }
+    a.tx = q[0]; a.tz = q[1]; a.face = q[2]; a.moving = !!q[3];
+  });
+  if (changed) mpSync();
+}
+function mpSync() {
+  if (!MP.on) return; const all = MP.players, now = MP.net.now(), seen = new Set();
   Object.entries(all || {}).forEach(([id, p]) => {
-    if (id === MP.id || !p || now - p.t > STALE) return; seen.add(id);
-    let a = state.actors.find(q => q.id === id);
+    const q = MP.pos[id];
+    if (id === MP.id || !p || !live(q, now)) return; seen.add(id);
+    let a = state.actors.find(x => x.id === id);
     if (!a) {
       const si = Math.max(0, p.c) % SHIRTS.length;
-      a = { id, i: p.sl % 30, remote: true, bot: false, name: p.n, shirt: SHIRTS[si], shirtName: SHIRT_NAMES[si], x: p.x, z: p.z, tx: p.x, tz: p.z, face: p.f, moving: false, stage: p.st,
+      a = { id, i: p.sl % 30, remote: true, bot: false, name: p.n, shirt: SHIRTS[si], shirtName: SHIRT_NAMES[si], x: q[0], z: q[1], tx: q[0], tz: q[1], face: q[2], moving: false, stage: p.st,
         testStatus: 'none', planStatus: 'none', parts: {}, order: [], away: {}, loose: false, doodle: false, shieldUntil: 0, prankReady: 0, lastVictim: '', tasks: [], launched: false, carry: null, eraTime: [] };
       a.h = gh(a.x, a.z); a.mesh = makeKid({ shirt: a.shirt, hair: p.sl % 5, hairColor: HAIR[(p.sl * 3) % HAIR.length] }); dyn.add(a.mesh);
       placeWork(a); a.tag = tag(a.name, ''); state.actors.push(a);
       if (p.la) { a.launched = true; a.mesh.visible = a.proj.visible = false; }
     }
-    a.tx = p.x; a.tz = p.z; a.face = p.f; a.moving = !!p.mv; a.mission = MISSIONS.find(q => q.id === p.mi) || null;
+    a.tx = q[0]; a.tz = q[1]; a.face = q[2]; a.moving = !!q[3]; a.mission = MISSIONS.find(x => x.id === p.mi) || null;
     a.testStatus = a.planStatus = p.se ? 'sent' : 'none'; a.shieldUntil = p.sd ? state.t + 1 : 0;
     if (a.stage !== p.st) { a.stage = p.st; placeWork(a); }
     const parts = {}; (p.pa || '').split(',').filter(Boolean).forEach(k => { parts[k] = true; });
@@ -153,7 +182,13 @@ function mpPlayers(all) {
   state.actors.filter(a => a.remote && !seen.has(a.id)).forEach(a => { // gone from the room
     [a.mesh, a.padG, a.proj].forEach(g => dyn.remove(g)); a.tag.remove(); COL.splice(COL.indexOf(a.padCol), 1); state.actors.splice(state.actors.indexOf(a), 1);
   });
-  MP.players = all || {}; state.hud = '';
+  // Two tablets that joined in the same instant can pick the same work spot: the later id moves to a free one
+  const clash = [...seen].some(id => all[id].sl === MP.slot && id < MP.id);
+  if (clash) {
+    const used = new Set([...seen].map(id => all[id].sl)); let s = 0; while (used.has(s) && s < 29) s++;
+    if (!used.has(s)) { const m = me(); MP.slot = m.i = s; placeWork(m); refreshActor(m); MP.sent = ''; toast('내 자리가 친구와 겹쳐서 옆자리로 옮겼어', ''); }
+  }
+  state.hud = '';
 }
 function mpMove(dt) { // classmates glide to where their tablets last said they were
   state.actors.forEach(a => { if (!a.remote) return; const k = Math.min(1, dt * 8); a.x += (a.tx - a.x) * k; a.z += (a.tz - a.z) * k; if (Math.hypot(a.tx - a.x, a.tz - a.z) > 30) { a.x = a.tx; a.z = a.tz; } a.h = gh(a.x, a.z); });
@@ -195,10 +230,10 @@ async function teacherRoom(root, room) {
   root.innerHTML = '<h1>우주의 숲 · 선생님 방</h1><div id="tstat">연결 중…</div>';
   let net; try { net = await netConnect(room, t => { $('tstat').textContent = t; }); } catch (e) { $('tstat').textContent = '연결하지 못했어요. 학교 인터넷을 확인하고 다시 열어 주세요.'; return; }
   const link = location.href.split('?')[0] + '?room=' + room;
-  let players = {}, reqs = {}, typing = false;
+  let players = {}, pos = {}, reqs = {}, typing = false, shown = '';
   const word = { sent: '확인 대기', ok: 'OK', back: '돌려보냄' };
   const draw = () => {
-    if (typing) return; const now = net.now(), live = Object.entries(players).filter(([, p]) => p && now - p.t < STALE);
+    if (typing) return; const now = net.now(), live = Object.entries(players).filter(([id, p]) => p && live2(pos[id], now));
     const count = [0, 0, 0, 0]; live.forEach(([, p]) => { count[p.st] = (count[p.st] || 0) + 1; });
     const ids = Object.keys(reqs).sort((a, b) => (reqs[a].status === 'sent' ? 0 : 1) - (reqs[b].status === 'sent' ? 0 : 1));
     root.innerHTML = `<h1>우주의 숲 · 선생님 방 <span class="stamp ok" style="font-size:22px">방 번호 ${esc(room)}</span></h1>
@@ -213,9 +248,11 @@ async function teacherRoom(root, room) {
           `<div class="row"><input id="n_${id}" placeholder="학생에게 한마디" value="${esc(p.note || '')}"><button class="btn" data-id="${id}" data-s="ok">OK 도장</button><button class="btn" data-id="${id}" data-s="back">돌려보내기</button></div></div>`; }).join('');
     root.querySelectorAll('button[data-id]').forEach(b => { b.onclick = () => { const r = reqs[b.dataset.id]; net.set('req/' + b.dataset.id, Object.assign({}, r, { status: b.dataset.s, note: $('n_' + b.dataset.id).value.trim() })); }; });
     root.querySelectorAll('input').forEach(i => { i.onfocus = () => { typing = true; }; i.onblur = () => { typing = false; setTimeout(draw, 50); }; });
-    $('tClear').onclick = () => { if (confirm('이 방의 학생 기록, 그림, 계획서를 모두 지울까요?')) ['p', 'ev', 'hid', 'req', 'fame'].forEach(k => net.del(k)); };
+    $('tClear').onclick = () => { if (confirm('이 방의 학생 기록, 그림, 계획서를 모두 지울까요?')) ['p', 'q', 'ev', 'hid', 'req', 'fame'].forEach(k => net.del(k)); };
   };
+  const live2 = live;
   net.onKids('p', p => { players = p || {}; draw(); });
+  net.onKids('q', q => { pos = q || {}; const n = Object.keys(pos).filter(id => live(pos[id], net.now())).join(); if (n !== shown) { shown = n; draw(); } }); // 위치는 자주 오니, 들어오고 나간 사람이 바뀔 때만 다시 그림
   net.onKids('req', r => { reqs = r || {}; draw(); });
   setInterval(draw, 5000);
 }

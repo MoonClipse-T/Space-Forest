@@ -384,6 +384,7 @@ function paper(c, kind, img) { // what you draw on: a cave wall, hanji, or a blu
 }
 function testForm(e) { // the early eras end in a drawing and its title; the teacher looks and says OK
   const m = me(), T = ERAS[e].test, d = state.tests[e] || (state.tests[e] = {}), pens = PAPER[T.paper].pens;
+  if (T.reveal && !d.revealed) { d.revealed = true; return say(ERAS[e].chief, T.reveal, () => testForm(e)); } // 문제는 지금 처음 공개
   openUI({ kind: 'plan', mid: true });
   $('modal').innerHTML = `<div class="bubble form"><div class="who">${T.title}</div><div style="font-size:19px">${esc(ERAS[e].chief)}: ${T.ask}</div>` +
     (m.testStatus === 'back' && state.testNote ? `<div class="note">선생님 한마디: ${esc(state.testNote)}</div>` : '') +
@@ -422,7 +423,10 @@ function keeperTalk(k) {
   if (p.shop !== k.id) { sfx('bad'); return say(k.name, [`잠깐, 순서가 있어! 지금은 ${josa(p.name, '을', '를')} 만들 차례야.`, `${SHOP[p.shop].name}에 가서 ${josa(p.item, '을', '를')} 먼저 구해 와. 우리 가게는 그다음이야!`]); }
   if (state.bag.length >= tune.bag_size) return say(k.name, [`가방이 꽉 찼잖아! 네 ${ER(m).work}에 가서 먼저 만들고 와.`]);
   if (p.kind === 'word' || p.kind === 'num') return typedQuiz(k, p);
-  if (p.kind === 'knap') return knapGame(k, p);
+  if (p.kind === 'nono') return nonoGame(k, p);
+  if (p.kind === 'moon') return moonQuiz(k, p);
+  if (p.kind === 'stairs') return stairsGame(k, p);
+  if (p.kind === 'train') return trainGame(k, p);
   if (p.kind === 'scope') return scopeGame(k, p);
   const order = p.a.map((t, i) => ({ t, ok: i === 0 })); for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
   ask(k.name, `${josa(p.item, '이', '가')} 필요하구나? 그럼 하나만 맞혀 봐.<br><b>${p.q}</b>`, order.map(o => ({ label: o.t, fn: () => {
@@ -446,8 +450,8 @@ function typedQuiz(k, p) { // write the answer: a riddle with a hint after two m
     const v = $('qa').value.trim(); if (!v) return;
     const n = (state.tries[p.id] = (state.tries[p.id] || 0) + 1);
     if (p.kind === 'num') {
-      const x = parseFloat(v.replace(/,/g, '')); if (isNaN(x)) { state.tries[p.id]--; return fb('숫자로 써 줘!'); }
-      if (Math.abs(x - p.ans) <= p.tol) { closeUI(); return giveItem(k, p); }
+      const x = parseNum(v); if (isNaN(x)) { state.tries[p.id]--; return fb('숫자로 써 줘!'); }
+      if (Math.abs(x - p.ans) < 1e-9) { closeUI(); return giveItem(k, p); } // 오차 없이 딱 맞아야 정답
       sfx('bad'); fb(`<b style="font-size:26px">${x < p.ans ? '업!' : '다운!'}</b> ${x}${p.unit}보다 ${x < p.ans ? '더 많아' : '더 적어'}. (${n}번째 도전)`);
     } else {
       if (p.ans.some(a => norm(a) === norm(v))) { closeUI(); return giveItem(k, p); }
@@ -459,34 +463,6 @@ function typedQuiz(k, p) { // write the answer: a riddle with a hint after two m
   };
   $('pSend').onclick = check; $('qa').onkeydown = e => { if (e.key === 'Enter') check(); };
   $('pLater').onclick = () => closeUI(); setTimeout(() => $('qa') && $('qa').focus(), 50);
-}
-function knapGame(k, p) { // tap the stone to knock flakes off until only the dotted axe head is left
-  const W = 44, H = 26, C = 12, axe = [[13, 6], [31, 9], [35, 13], [31, 18], [13, 21], [10, 13]];
-  const inPoly = (x, y) => { let c = false; for (let i = 0, j = axe.length - 1; i < axe.length; j = i++) { const [xi, yi] = axe[i], [xj, yj] = axe[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; };
-  let rock, tgt, outN, flakes = [];
-  const fresh = () => { rock = []; tgt = []; outN = 0; for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const dx = (x - 22) / 20, dy = (y - 13) / 12, wob = 0.08 * Math.sin(x * 1.7 + y * 0.9); const on = dx * dx + dy * dy < 1 + wob; rock.push(on); const t = on && inPoly(x + 0.5, y + 0.5); tgt.push(t); if (on && !t) outN++; } };
-  fresh();
-  openUI({ kind: 'knap', mid: true });
-  $('modal').innerHTML = `<div class="bubble" style="width:min(640px,94vw);text-align:center"><div class="who">${esc(k.name)} · 돌 깨기</div>${p.q}<canvas id="knap" width="${W * C}" height="${H * C}" style="width:100%;border-radius:18px;margin-top:8px;touch-action:none;display:block;background:#f3e3c0"></canvas><div id="kst" style="margin-top:6px"></div><div class="opts" style="justify-content:center"><button class="opt" id="kNew">새 돌로 다시</button><button class="opt" id="pLater">그만할래</button></div></div>`;
-  const cv = $('knap'), x = cv.getContext('2d');
-  const stats = () => { let left = 0, keep = 0, all = 0; rock.forEach((r, i) => { if (tgt[i] || inPoly((i % W) + 0.5, Math.floor(i / W) + 0.5)) { all++; if (r) keep++; } else if (r) left++; }); return { done: 1 - left / outN, keep: keep / all }; };
-  const draw = () => {
-    x.fillStyle = '#f3e3c0'; x.fillRect(0, 0, cv.width, cv.height);
-    rock.forEach((r, i) => { if (!r) return; const cx = (i % W) * C, cy = Math.floor(i / W) * C, sh = 150 + ((i * 37) % 7) * 9; x.fillStyle = `rgb(${sh},${sh - 6},${sh - 18})`; x.beginPath(); x.roundRect(cx + 0.5, cy + 0.5, C - 1, C - 1, 3); x.fill(); });
-    x.setLineDash([8, 6]); x.lineWidth = 4; x.strokeStyle = '#ff8a5c'; x.beginPath(); axe.forEach(([ax, ay], i) => (i ? x.lineTo : x.moveTo).call(x, ax * C, ay * C)); x.closePath(); x.stroke(); x.setLineDash([]);
-    flakes.forEach(f2 => { x.fillStyle = 'rgba(140,130,110,' + f2.a + ')'; x.fillRect(f2.x, f2.y, 6, 6); });
-    const st = stats(); $('kst').textContent = `다듬기 ${Math.round(st.done * 100)}% · 도끼 날 ${Math.round(st.keep * 100)}% 남음`;
-  };
-  const anim = () => { if (!state.ui || state.ui.kind !== 'knap') return; flakes = flakes.filter(f2 => (f2.a -= 0.05) > 0); flakes.forEach(f2 => { f2.x += f2.vx; f2.y += f2.vy; f2.vy += 0.4; }); draw(); if (flakes.length) requestAnimationFrame(anim); };
-  cv.onpointerdown = ev => {
-    const b = cv.getBoundingClientRect(), px = (ev.clientX - b.left) * cv.width / b.width / C, py = (ev.clientY - b.top) * cv.height / b.height / C; let hit = 0;
-    rock.forEach((r, i) => { if (r && Math.hypot((i % W) + 0.5 - px, Math.floor(i / W) + 0.5 - py) < 2.3) { rock[i] = false; hit++; for (let q = 0; q < 2; q++) flakes.push({ x: (i % W) * C, y: Math.floor(i / W) * C, vx: (Math.random() - 0.5) * 6, vy: -Math.random() * 5, a: 1 }); } });
-    if (!hit) return; tone(300 + Math.random() * 200, 0.06, 'square', 0.12); anim();
-    const st = stats();
-    if (st.keep < 0.82) { sfx('bad'); toast('앗, 도끼 날까지 깨져 버렸다! 새 돌로 다시 해 보자', 'bad'); fresh(); draw(); return; }
-    if (st.done >= 0.9) { closeUI(); giveItem(k, p); }
-  };
-  $('kNew').onclick = () => { fresh(); draw(); }; $('pLater').onclick = () => closeUI(); draw();
 }
 function scopeGame(k, p) { // two telescope views of the night sky; tap the four things that are different
   const R = 140, L = { x: 165, y: 160 }, Rt = { x: 475, y: 160 }; let s0 = 3; const r = () => { s0 = (s0 * 16807) % 2147483647; return s0 / 2147483647; };
@@ -591,7 +567,7 @@ function uiStep(dt) {
     c.fillStyle = '#ffd166'; c.beginPath(); c.arc(220, 220, 34, 0, 6.3); c.fill();
     $('dialN').textContent = `${u.hits} / ${tune.repair_hits}`;
     if (u.hits >= tune.repair_hits) { me().loose = false; refreshActor(me()); closeUI(); toast(ER(me()).loose.fixed, 'good'); sfx('ok'); }
-  } else if ((u.kind === 'plan' || u.kind === 'knap' || u.kind === 'scope') && pressed('Escape')) $('pLater').click();
+  } else if (['plan', 'nono', 'moon', 'stairs', 'train', 'scope'].includes(u.kind) && pressed('Escape') && $('pLater')) $('pLater').click();
 }
 
 // ---- The quest line: always one next thing ---------------------------------------------------------
@@ -620,7 +596,7 @@ function quest() {
   const next = eraParts(m.stage).find(p => !m.parts[p.id] && !m.away[p.id] && !state.bag.includes(p.id));
   if (state.bag.length && (!next || state.bag.length >= tune.bag_size)) return Object.assign({ text: `내 ${E.work}에서 만들자` }, m.pad);
   if (next) { const s = SHOP[next.shop], k = keeperSpot(s); return { text: `${s.name}에서 ${next.item} 구하기` + (state.bag.length ? ' (또는 내 자리에서 만들기)' : ''), x: k.x, z: k.z }; }
-  if (C) return Object.assign({ text: `모두 완성! ${E.chief}에게 ${josa(E.test.title, '을', '를')} 보자` }, C);
+  if (C) { const tt = (state.tests[m.stage] || {}).revealed ? E.test.title : E.test.pub || E.test.title; return Object.assign({ text: `모두 완성! ${E.chief}에게 ${josa(tt, '을', '를')} 보자` }, C); }
   return Object.assign({ text: '준비 끝! 북쪽 발사대로 가자' }, PLACES.launch);
 }
 
@@ -638,8 +614,8 @@ function start() {
   if ($('bStart').disabled) return; // already joining
   if (!room) { reset(); setScene('play'); sfx('ok'); return; }
   const msg = $('joinMsg'), b = $('bStart'); b.disabled = true; msg.textContent = '연결 중…';
-  mpJoin(room, t => { msg.textContent = t; }).then(() => { setScene('play'); sfx('ok'); toast(`${room}번 방에 들어왔어! 반 친구들과 함께 시간 여행 시작`, 'good'); })
-    .catch(() => { b.disabled = false; msg.textContent = '방에 연결하지 못했어요. 와이파이를 확인하거나, 방 번호를 비우고 혼자 해 보세요.'; });
+  mpJoin(room, t => { msg.textContent = t; }).then(mode => { setScene('play'); sfx('ok'); toast(`${room}번 방에 들어왔어! (${mode === 'rest' ? '직접 연결' : '실시간 연결'}) 반 친구들과 함께 시간 여행 시작`, 'good'); })
+    .catch(e => { console.warn('join', e && e.message); b.disabled = false; msg.textContent = (e && e.message === 'block' ? '학교 인터넷이 게임 서버를 막고 있어요.' : '게임 서버가 대답하지 않아요.') + ' [시작]을 한 번 더 눌러 보거나, 방 번호를 비우고 혼자 해 보세요.'; });
 }
 function setZoom(dir) { zoom = Math.max(tune.zoom_min, Math.min(tune.zoom_max, zoom * Math.pow(tune.zoom_step, dir))); if (Math.abs(zoom - 1) < 0.12) zoom = 1; }
 const SKIES = [[0xf5c79a, 0xf6d3b0], [0xa9dcf2, 0xc9e8f2], [0x9fbbe0, 0xbccbe2], [0x2e2559, 0x6c5fa8]]; // dusk, spring sky, hazy sky, space

@@ -31,7 +31,8 @@ window.CONFIG = {
   stair_drain_up: { value: 0.18, min: 0, max: 0.6, step: 0.01 }, // 꼭대기에 다가갈수록 더 빨리 줄어드는 양 · 11-12 0.2 → 0.18
   stair_refill: { value: 0.07, min: 0.02, max: 0.3, step: 0.01 }, // 한 칸 오를 때 채워지는 양
   stair_turn: { value: 0.38, min: 0.1, max: 0.7, step: 0.02 },   // 계단이 꺾일 확률
-  train_need: { value: 3, min: 1, max: 6, step: 1 },              // 기차 셈 문제를 몇 번 맞혀야 하나
+  sky_drain_more: { value: 0.06, min: 0, max: 0.3, step: 0.01 }, // 우주 무한 계단: 100칸 넘어서 300칸까지 더 빨리 줄어드는 양
+  train_need:{ value: 3, min: 1, max: 6, step: 1 },              // 기차 셈 문제를 몇 번 맞혀야 하나
 
   // Pranks
   prank_cooldown: { value: 45, min: 5, max: 180, step: 5 },      // seconds before the same kid can prank again

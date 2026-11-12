@@ -97,7 +97,10 @@ async function restNet(base, stage) {
 
 // ---- Joining a room ------------------------------------------------------------------------------------
 const STALE = 45000; // a tablet silent this long has left the room
-function myId() { try { let id = sessionStorage.getItem('sf:id'); if (!id) { id = 'k' + Math.random().toString(36).slice(2, 9); sessionStorage.setItem('sf:id', id); } return id; } catch (e) { return 'k' + Math.random().toString(36).slice(2, 9); } }
+function myId() { // 깍두기 선생님 탭은 따로 (선생님 방에서 연 탭은 그 탭의 저장 공간을 물려받으므로)
+  const key = KK ? 'sf:kkid' : 'sf:id', make = () => (KK ? 't' : 'k') + Math.random().toString(36).slice(2, 9);
+  try { let id = sessionStorage.getItem(key); if (!id) { id = make(); sessionStorage.setItem(key, id); } return id; } catch (e) { return make(); }
+}
 const live = (q, now) => Array.isArray(q) && now - q[4] < STALE; // q = [x, z, 보는 방향, 걷는 중, 보낸 시각]
 async function mpJoin(room, say) {
   let net = await netConnect(room, say), all, pos;
@@ -109,9 +112,9 @@ async function mpJoin(room, say) {
   }
   all = all || {}; pos = pos || {};
   const now = net.now(), id = myId(), mine = all[id];
-  const used = new Set(Object.keys(all).filter(k => k !== id && all[k] && live(pos[k], now)).map(k => all[k].sl));
-  let slot = mine ? mine.sl : 0; while (!mine && used.has(slot) && slot < 29) slot++;
-  Object.assign(MP, { on: true, net, id, room, slot, players: {}, pos: {}, req: null, fame: {}, sent: '', nextSend: 0, sentPos: '', nextPos: 0, first: true });
+  const used = new Set(Object.keys(all).filter(k => k !== id && all[k] && !all[k].kk && live(pos[k], now)).map(k => all[k].sl));
+  let slot = KK ? KK_SLOT : mine ? mine.sl : 0; while (!KK && !mine && used.has(slot) && slot < 29) slot++; // 깍두기 선생님은 31번째 자리
+  Object.assign(MP, { on: true, net, id, room, slot, players: {}, pos: {}, req: null, fame: {}, sky: {}, sent: '', nextSend: 0, sentPos: '', nextPos: 0, first: true });
   reset(); // only me: the classmates come in as they are seen
   const m = me(); if (mine) mpRestore(m, mine, pos[id]);
   net.onKids('p', p => { MP.players = p || {}; mpSync(); });
@@ -120,6 +123,7 @@ async function mpJoin(room, say) {
   net.onKids('hid', mpHidden);
   net.on('req/' + id, r => { MP.req = r; if (r && r.stage === me().stage) applyReq(r); });
   net.onKids('fame', f => { MP.fame = f || {}; });
+  net.onKids('sky', s => { MP.sky = s || {}; }); // 우주 무한 계단 최고 기록 {n: 이름, b: 칸}
   net.on('go', v => { MP.go = v; if (v && MP.onGo) { const f = MP.onGo; MP.onGo = null; f(); } }); // 선생님이 [다같이 시작]을 누른 시각
   return net.mode;
 }
@@ -142,6 +146,7 @@ function mpTick() {
   const snap = { n: m.name, c: SHIRTS.indexOf(m.shirt), sl: MP.slot, st: m.stage, // what I am: only when it changes
     pa: Object.keys(m.parts).join(','), or: m.order.join(','), lo: m.loose ? 1 : 0, dd: m.doodle ? 1 : 0, ca: m.carry ? m.carry.owner + '|' + m.carry.part : '',
     la: m.launched ? 1 : 0, se: (m.stage < 3 ? m.testStatus : m.planStatus) === 'sent' ? 1 : 0, ps: m.planStatus, sd: state.t < m.shieldUntil ? 1 : 0, mi: m.mission ? m.mission.id : '' };
+  if (KK) snap.kk = 1;
   const s = JSON.stringify(snap);
   if (s === MP.sent && t - MP.sentAt < STATE_BEAT) return;
   MP.sent = s; MP.sentAt = t; snap.t = MP.net.now(); MP.net.set('p/' + MP.id, snap);
@@ -165,10 +170,10 @@ function mpSync() {
     let a = state.actors.find(x => x.id === id);
     if (!a) {
       const si = Math.max(0, p.c) % SHIRTS.length;
-      a = { id, i: p.sl % 30, remote: true, bot: false, name: p.n, shirt: SHIRTS[si], shirtName: SHIRT_NAMES[si], x: q[0], z: q[1], tx: q[0], tz: q[1], face: q[2], moving: false, stage: p.st,
+      a = { id, i: p.kk ? KK_SLOT : p.sl % 30, kk: !!p.kk, remote: true, bot: false, name: p.n, shirt: SHIRTS[si], shirtName: SHIRT_NAMES[si], x: q[0], z: q[1], tx: q[0], tz: q[1], face: q[2], moving: false, stage: p.st,
         testStatus: 'none', planStatus: 'none', parts: {}, order: [], away: {}, loose: false, doodle: false, shieldUntil: 0, prankReady: 0, lastVictim: '', tasks: [], launched: false, carry: null, eraTime: [] };
       a.h = gh(a.x, a.z); a.mesh = makeKid({ shirt: a.shirt, hair: p.sl % 5, hairColor: HAIR[(p.sl * 3) % HAIR.length] }); dyn.add(a.mesh);
-      placeWork(a); a.tag = tag(a.name, ''); state.actors.push(a);
+      placeWork(a); a.tag = tag(a.kk ? '★ ' + a.name : a.name, a.kk ? 'kk' : ''); state.actors.push(a);
       if (p.la) { a.launched = true; a.mesh.visible = a.proj.visible = false; }
     }
     a.tx = q[0]; a.tz = q[1]; a.face = q[2]; a.moving = !!q[3]; a.mission = MISSIONS.find(x => x.id === p.mi) || null;
@@ -184,9 +189,9 @@ function mpSync() {
     [a.mesh, a.padG, a.proj].forEach(g => dyn.remove(g)); a.tag.remove(); COL.splice(COL.indexOf(a.padCol), 1); state.actors.splice(state.actors.indexOf(a), 1);
   });
   // Two tablets that joined in the same instant can pick the same work spot: the later id moves to a free one
-  const clash = [...seen].some(id => all[id].sl === MP.slot && id < MP.id);
+  const clash = !KK && [...seen].some(id => !all[id].kk && all[id].sl === MP.slot && id < MP.id);
   if (clash) {
-    const used = new Set([...seen].map(id => all[id].sl)); let s = 0; while (used.has(s) && s < 29) s++;
+    const used = new Set([...seen].filter(id => !all[id].kk).map(id => all[id].sl)); let s = 0; while (used.has(s) && s < 29) s++;
     if (!used.has(s)) { const m = me(); MP.slot = m.i = s; placeWork(m); refreshActor(m); MP.sent = ''; toast('내 자리가 친구와 겹쳐서 옆자리로 옮겼어', ''); }
   }
   state.hud = '';
@@ -231,10 +236,11 @@ async function teacherRoom(root, room) {
   root.innerHTML = '<h1>우주의 숲 · 선생님 방</h1><div id="tstat">연결 중…</div>';
   let net; try { net = await netConnect(room, t => { $('tstat').textContent = t; }); } catch (e) { $('tstat').textContent = '연결하지 못했어요. 학교 인터넷을 확인하고 다시 열어 주세요.'; return; }
   const link = location.href.split('?')[0] + '?room=' + room;
-  let players = {}, pos = {}, reqs = {}, typing = false, shown = '', go = null;
+  let players = {}, pos = {}, reqs = {}, sky = {}, typing = false, shown = '', go = null;
   const word = { sent: '확인 대기', ok: 'OK', back: '돌려보냄' };
   const draw = () => {
-    if (typing) return; const now = net.now(), live = Object.entries(players).filter(([id, p]) => p && live2(pos[id], now));
+    if (typing) return; const now = net.now(), all = Object.entries(players).filter(([id, p]) => p && live2(pos[id], now)), live = all.filter(([, p]) => !p.kk), kk = all.some(([, p]) => p.kk);
+    const top = Object.values(sky).filter(s => s && s.b > 0).sort((a, b) => b.b - a.b).slice(0, 10);
     const count = [0, 0, 0, 0]; live.forEach(([, p]) => { count[p.st] = (count[p.st] || 0) + 1; });
     const ids = Object.keys(reqs).sort((a, b) => (reqs[a].status === 'sent' ? 0 : 1) - (reqs[b].status === 'sent' ? 0 : 1));
     root.innerHTML = `<h1>우주의 숲 · 선생님 방 <span class="stamp ok" style="font-size:22px">방 번호 ${esc(room)}</span></h1>
@@ -242,7 +248,9 @@ async function teacherRoom(root, room) {
       <div class="plan">지금 들어온 학생 ${live.length}명 · 석기 ${count[0]} · 철기 ${count[1]} · 산업 ${count[2]} · 우주 ${count[3]} · 발사 ${live.filter(([, p]) => p.la).length}
       <div style="font-weight:400;margin-top:6px">${live.map(([, p]) => `${esc(p.n)}(${ERAS[p.st].name.slice(0, 2)}${p.la ? '·발사' : ''})`).join(' · ') || '아직 아무도 없어요'}</div>
       <div class="row">${go ? `<span class="stamp ok">출발함 · ${new Date(go).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</span>` : '<button class="btn" id="tGo" style="background:#ffd166;font-size:22px">다같이 시작</button><span style="align-self:center">학생들은 이 버튼을 누를 때까지 첫 화면에서 기다려요</span>'}
-      <button class="btn" id="tClear">방 비우기 (새 수업 시작)</button></div></div>` +
+      <button class="btn" id="tClear">방 비우기 (새 수업 시작)</button></div>
+      <div class="row"><button class="btn" id="tKK" style="background:#ffe08a">${kk ? '★ 깍두기 선생님 들어가 있음 · 창 하나 더 열기' : '★ 나도 깍두기로 들어가기'}</button><span style="align-self:center;font-weight:400">새 창에서 반 친구들과 같은 섬에 들어가요. 모든 게임을 해 보고 무엇이든 바로 통과할 수 있어요.</span></div>
+      ${top.length ? `<div style="margin-top:10px">우주 무한 계단 순위: <span style="font-weight:400">${top.map((s, i) => `${i + 1}. ${esc(s.n)} ${s.b}칸`).join(' · ')}</span></div>` : ''}</div>` +
       (ids.length ? '' : '<div class="plan">아직 제출된 그림이나 계획서가 없어요.</div>') + ids.map(id => { const p = reqs[id], plan = p.kind === 'plan';
         return `<div class="plan"><h2>${esc(p.name)} · ${ERAS[p.stage].name} ${plan ? '탐사 계획서' : ERAS[p.stage].test.title} <span class="stamp ${p.status}">${word[p.status] || ''}</span></h2>` +
           (plan ? `임무: ${esc(p.mission)} · 우주선: ${esc(p.fields.ship || '')}<dl>` + PLAN_FIELDS.slice(1).map(f => `<dt>${f.label}</dt><dd>${esc(p.fields[f.key] || '')}</dd>`).join('') + '</dl>'
@@ -250,10 +258,12 @@ async function teacherRoom(root, room) {
           `<div class="row"><input id="n_${id}" placeholder="학생에게 한마디" value="${esc(p.note || '')}"><button class="btn" data-id="${id}" data-s="ok">OK 도장</button><button class="btn" data-id="${id}" data-s="back">돌려보내기</button></div></div>`; }).join('');
     root.querySelectorAll('button[data-id]').forEach(b => { b.onclick = () => { const r = reqs[b.dataset.id]; net.set('req/' + b.dataset.id, Object.assign({}, r, { status: b.dataset.s, note: $('n_' + b.dataset.id).value.trim() })); }; });
     root.querySelectorAll('input').forEach(i => { i.onfocus = () => { typing = true; }; i.onblur = () => { typing = false; setTimeout(draw, 50); }; });
-    $('tClear').onclick = () => { if (confirm('이 방의 학생 기록, 그림, 계획서를 모두 지울까요?')) ['p', 'q', 'ev', 'hid', 'req', 'fame', 'go'].forEach(k => net.del(k)); };
+    $('tClear').onclick = () => { if (confirm('이 방의 학생 기록, 그림, 계획서를 모두 지울까요?')) ['p', 'q', 'ev', 'hid', 'req', 'fame', 'go', 'sky'].forEach(k => net.del(k)); };
     if ($('tGo')) $('tGo').onclick = () => net.set('go', net.now());
+    $('tKK').onclick = () => window.open(location.pathname + '?room=' + room + '&kk=1', '_blank'); // 이 탭의 '선생님 확인'을 물려받아 암호를 다시 묻지 않는다
   };
   net.on('go', v => { go = v; draw(); });
+  net.onKids('sky', s => { sky = s || {}; draw(); });
   const live2 = live;
   net.onKids('p', p => { players = p || {}; draw(); });
   net.onKids('q', q => { pos = q || {}; const n = Object.keys(pos).filter(id => live(pos[id], net.now())).join(); if (n !== shown) { shown = n; draw(); } }); // 위치는 자주 오니, 들어오고 나간 사람이 바뀔 때만 다시 그림

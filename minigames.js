@@ -130,18 +130,26 @@ function moonQuiz(k, p) {
 
 // ---- 철기: 첨성대 돌계단 오르기 --------------------------------------------------------------------------
 // [오르기] 지금 보는 쪽으로 한 칸 · [방향 바꾸기] 돌아서서 한 칸. 계단 방향과 다르게 누르거나 시간 막대가 다 닳으면 떨어진다.
-function stairsGame(k, p) {
-  const GOAL = tune.stair_goal, W = 360, H = 540, SW = 46, SH = 30;
-  let steps, pos, face, bar, run, over, hop, camX, camY, best = 0, last = 0, raf = 0, keyFn;
-  const tower = makeTower();
+// done 이 있으면 '우주 무한 계단': 우주선을 발사한 학생의 보너스. 꼭대기가 없고, 높이 오를수록 시간 막대가 더 빨리 준다.
+const SKY_SIGHTS = [[25, '인공위성', '#cfd8ff'], [60, '국제 우주 정거장', '#e8e8f0'], [100, '달', '#f2ead2'], [160, '화성', '#e9825a'], [230, '목성', '#e8b98a'], [310, '토성', '#f2d98a'], [400, '천왕성', '#9fe3e8'], [500, '해왕성', '#6f8cff'], [650, '태양계 밖', '#ffd166']];
+function stairsGame(k, p, done) {
+  const SKY = !!done, GOAL = SKY ? Infinity : tune.stair_goal, W = 360, H = 540, SW = 46, SH = 30;
+  let steps, pos, face, bar, run, over, hop, camX, camY, best = 0, last = 0, raf = 0, keyFn, gx = 0, gd = 1;
+  const tower = SKY ? null : makeTower();
+  const BKEY = 'sf:skyBest'; if (SKY) try { best = Number(localStorage.getItem(BKEY)) || 0; } catch (e) { /* no storage */ }
+  const grow = n => { for (let i = 0; i < n; i++) { const j = steps.length; if (j > 1 && (rng() < tune.stair_turn || Math.abs(gx + gd) > 4)) gd = -gd; gx += gd; steps.push({ x: gx, d: gd }); } };
   const fresh = () => {
-    steps = [{ x: 0, d: 1 }]; let sx = 0, d = 1;
-    for (let i = 1; i <= GOAL + 10; i++) { if (i > 1 && (rng() < tune.stair_turn || Math.abs(sx + d) > 4)) d = -d; sx += d; steps.push({ x: sx, d }); }
+    steps = [{ x: 0, d: 1 }]; gx = 0; gd = 1; grow(SKY ? 60 : GOAL + 10);
     pos = 0; face = 1; bar = 1; run = false; over = ''; hop = 0; camX = 0; camY = 0;
     panel('');
   };
+  const rankHtml = () => { // 우리 반 순위 (방에서 할 때)
+    if (!MP.on) return '';
+    const top = Object.values(MP.sky || {}).filter(s => s && s.b > 0).sort((a, b) => b.b - a.b).slice(0, 5);
+    return top.length ? '<div style="font-size:16px;margin-top:6px">우리 반 순위<br>' + top.map((s, i) => `${i + 1}. ${esc(s.n)} ${s.b}칸`).join(' · ') + '</div>' : '';
+  };
   openUI({ kind: 'stairs', mid: true });
-  $('modal').innerHTML = `<div class="bubble" style="width:auto;max-width:94vw;padding:14px 18px 16px;text-align:center"><div class="who">${esc(k.name)} · 첨성대 오르기</div>` +
+  $('modal').innerHTML = `<div class="bubble" style="width:auto;max-width:94vw;padding:14px 18px 16px;text-align:center"><div class="who">${SKY ? '우주 무한 계단' : esc(k.name) + ' · 첨성대 오르기'}</div>` +
     `<div style="position:relative;display:inline-block;margin-top:4px"><canvas id="stairs" width="${W}" height="${H}" style="display:block;height:min(66vh,${H}px);width:auto;max-width:90vw;border-radius:22px;touch-action:none"></canvas>` +
     '<button id="sTurn" class="stb" style="left:10px">⇄<small>방향 바꾸기</small></button><button id="sUp" class="stb" style="right:10px">⬆<small>오르기</small></button>' +
     '<div id="sPanel" class="stpanel"></div></div>' +
@@ -152,8 +160,11 @@ function stairsGame(k, p) {
   const cv = $('stairs'), x = cv.getContext('2d');
   function panel(html) { $('sPanel').innerHTML = html; }
   const fall = why => {
-    run = false; over = why; best = Math.max(best, pos); sfx('bad');
-    panel(`<b style="font-size:24px">${why === 'time' ? '앗, 시간이 다 됐어!' : '으악, 헛디뎠다!'}</b><br>${pos}칸까지 올랐어 (최고 ${best}칸)<div class="opts" style="justify-content:center"><button class="opt" id="sAgain" style="background:var(--sun)">다시 도전</button></div>`);
+    run = false; over = why; const rec = SKY && pos > best; best = Math.max(best, pos); sfx('bad');
+    if (rec) { try { localStorage.setItem(BKEY, best); } catch (e) { /* fine */ } if (MP.on) MP.net.set('sky/' + MP.id, { n: me().name, b: best }); }
+    const seen = SKY ? SKY_SIGHTS.filter(s => s[0] <= pos).pop() : null;
+    panel(`<b style="font-size:24px">${why === 'time' ? '앗, 시간이 다 됐어!' : '으악, 헛디뎠다!'}</b><br>${pos}칸까지 올랐어 (최고 ${best}칸)` + (rec ? '<br><b style="color:#2f9e77">새 기록!</b>' : '') + (seen ? `<br><span style="font-size:16px">${seen[1]}까지 갔어!</span>` : '') + (SKY ? rankHtml() : '') +
+      '<div class="opts" style="justify-content:center"><button class="opt" id="sAgain" style="background:var(--sun)">다시 도전</button></div>');
     $('sAgain').onclick = () => { fresh(); };
   };
   const press = turn => {
@@ -163,6 +174,8 @@ function stairsGame(k, p) {
     const nx = steps[pos + 1];
     if (nx.d !== face) { hop = 1; return fall('slip'); }
     pos++; hop = 1; bar = Math.min(1, bar + tune.stair_refill); tone(520 + (pos % 8) * 30, 0.05, 'triangle', 0.1);
+    if (SKY && pos + 30 > steps.length) grow(40);
+    if (SKY && SKY_SIGHTS.some(s => s[0] === pos)) sfx('ok');
     if (pos >= GOAL) { run = false; sfx('ok'); panel('<b style="font-size:26px">첨성대 꼭대기 도착!</b><br>밤하늘이 한눈에 보여!'); setTimeout(() => { if (state.ui && state.ui.kind === 'stairs') { closeUI(); giveItem(k, p); } }, 1500); }
   };
   window.__stairs = { get pos() { return pos; }, get face() { return face; }, get bar() { return bar; }, get over() { return over; }, next: () => steps[pos + 1], press }; // 점검용
@@ -178,35 +191,49 @@ function stairsGame(k, p) {
     $('sPinNo').onclick = () => { if (over) fall(over); else panel(''); };
     setTimeout(() => $('sPin') && $('sPin').focus(), 50);
   };
-  $('pLater').onclick = () => closeUI();
+  $('pLater').onclick = () => { closeUI(); if (SKY) done(); };
+  if (SKY) $('sTeach').remove(); // 보너스 놀이에는 통과가 없다
   const sx = i => W / 2 + (steps[i].x - camX) * SW, sy = i => H * 0.68 - (i - camY) * SH;
   const loop = now => {
     if (!state.ui || state.ui.kind !== 'stairs') { removeEventListener('keydown', keyFn); return; }
     const dt = Math.min(0.05, (now - last) / 1000 || 0); last = now;
-    if (run) { bar -= (tune.stair_drain + tune.stair_drain_up * pos / GOAL) * dt; if (bar <= 0) { bar = 0; fall('time'); } }
+    const rate = SKY ? tune.stair_drain + tune.stair_drain_up * Math.min(1, pos / 100) + tune.sky_drain_more * Math.min(2, Math.max(0, pos - 100) / 100) : tune.stair_drain + tune.stair_drain_up * pos / GOAL;
+    if (run) { bar -= rate * dt; if (bar <= 0) { bar = 0; fall('time'); } }
     hop = Math.max(0, hop - dt * 9);
     const tx = over === 'slip' ? steps[pos].x + face * 0.5 : steps[pos].x;
     camX += (tx - camX) * Math.min(1, dt * 10); camY += (pos - camY) * Math.min(1, dt * 12);
-    // sky: dusk at the foot, stars near the top
-    const f = pos / GOAL, sk = x.createLinearGradient(0, 0, 0, H);
-    sk.addColorStop(0, `rgb(${46 - f * 20},${37 - f * 15},${89 - f * 20})`); sk.addColorStop(1, `rgb(${240 - f * 150},${170 - f * 100},${130 - f * 30})`);
-    x.fillStyle = sk; x.fillRect(0, 0, W, H);
     let s0 = 5; const rr = () => { s0 = (s0 * 16807) % 2147483647; return s0 / 2147483647; };
-    for (let i = 0; i < 50; i++) { x.fillStyle = `rgba(255,246,216,${(0.2 + f * 0.8) * rr()})`; x.beginPath(); x.arc(rr() * W, rr() * H * 0.7, 0.7 + rr() * 1.2, 0, 6.3); x.fill(); }
-    // 첨성대 behind the stairs: the view slides from its base to its top as you climb
-    const th = tower.height, vis = H, off = (th - vis) * Math.min(1, camY / GOAL);
-    x.globalAlpha = 0.4; x.drawImage(tower, 0, th - vis - off, tower.width, vis, (W - tower.width) / 2, 0, tower.width, vis); x.globalAlpha = 1; // far behind: faint
+    if (SKY) drawSpace(x, W, H, camY, SH);
+    else {
+      // sky: dusk at the foot, stars near the top
+      const f = pos / GOAL, sk = x.createLinearGradient(0, 0, 0, H);
+      sk.addColorStop(0, `rgb(${46 - f * 20},${37 - f * 15},${89 - f * 20})`); sk.addColorStop(1, `rgb(${240 - f * 150},${170 - f * 100},${130 - f * 30})`);
+      x.fillStyle = sk; x.fillRect(0, 0, W, H);
+      for (let i = 0; i < 50; i++) { x.fillStyle = `rgba(255,246,216,${(0.2 + f * 0.8) * rr()})`; x.beginPath(); x.arc(rr() * W, rr() * H * 0.7, 0.7 + rr() * 1.2, 0, 6.3); x.fill(); }
+      // 첨성대 behind the stairs: the view slides from its base to its top as you climb
+      const th = tower.height, vis = H, off = (th - vis) * Math.min(1, camY / GOAL);
+      x.globalAlpha = 0.4; x.drawImage(tower, 0, th - vis - off, tower.width, vis, (W - tower.width) / 2, 0, tower.width, vis); x.globalAlpha = 1; // far behind: faint
+    }
     // the stone steps: dark slabs with a bright top edge, so the zigzag stands out from the tower
     for (let i = Math.max(0, pos - 8); i <= Math.min(steps.length - 1, pos + 22); i++) {
       const X = sx(i), Y = sy(i); if (Y < -30 || Y > H + 30) continue;
       x.fillStyle = 'rgba(30,24,60,.35)'; x.beginPath(); x.roundRect(X - SW / 2 + 3, Y + 5, SW, 16, 5); x.fill();
-      x.fillStyle = i === GOAL ? '#ffd166' : '#6f5f86'; x.beginPath(); x.roundRect(X - SW / 2, Y, SW, 16, 5); x.fill();
-      x.fillStyle = i === GOAL ? '#fff1b8' : '#d9cbe8'; x.beginPath(); x.roundRect(X - SW / 2, Y, SW, 5, [5, 5, 0, 0]); x.fill();
+      const gold = SKY ? i % 50 === 0 && i > 0 : i === GOAL;
+      x.fillStyle = gold ? '#ffd166' : SKY ? '#34407e' : '#6f5f86'; x.beginPath(); x.roundRect(X - SW / 2, Y, SW, 16, 5); x.fill();
+      x.fillStyle = gold ? '#fff1b8' : SKY ? '#8fe3ff' : '#d9cbe8'; x.beginPath(); x.roundRect(X - SW / 2, Y, SW, 5, [5, 5, 0, 0]); x.fill();
       if (i % 10 === 0 && i) { x.fillStyle = '#fff8e8'; x.font = '700 12px sans-serif'; x.textAlign = 'center'; x.fillText(i, X, Y + 13); }
     }
     // the kid (iron-age clothes: white jacket, straw hat), facing their way
     const px = W / 2 + (steps[pos].x - camX) * SW + (over === 'slip' ? face * 18 : 0), py = sy(pos) - Math.sin(hop * Math.PI) * 14 + (over === 'slip' ? (1 - hop) * 60 : 0);
     x.save(); x.translate(px, py); x.scale(face, 1);
+    if (SKY) { // 우주복: 흰 옷, 등짐, 둥근 헬멧과 파란 얼굴창
+      x.fillStyle = '#c9cfe6'; x.fillRect(-8, -14, 6, 14); x.fillRect(2, -14, 6, 14);
+      x.fillStyle = '#9aa3c4'; x.beginPath(); x.roundRect(-17, -36, 9, 20, 4); x.fill();
+      x.fillStyle = '#f6f7ff'; x.beginPath(); x.roundRect(-11, -37, 22, 25, 8); x.fill(); x.fillStyle = '#ff8a73'; x.fillRect(-4, -30, 8, 5);
+      x.fillStyle = '#f6f7ff'; x.beginPath(); x.arc(0, -49, 14, 0, 6.3); x.fill(); x.strokeStyle = '#c9cfe6'; x.lineWidth = 2; x.stroke();
+      x.fillStyle = '#5b8fd6'; x.beginPath(); x.ellipse(4, -49, 8, 7, 0, 0, 6.3); x.fill(); x.fillStyle = 'rgba(255,255,255,.7)'; x.beginPath(); x.arc(6, -52, 2.2, 0, 6.3); x.fill();
+      x.restore();
+    } else {
     x.fillStyle = '#4a3d6b'; x.fillRect(-7, -14, 5, 14); x.fillRect(2, -14, 5, 14);
     x.fillStyle = '#fbf6ea'; x.beginPath(); x.roundRect(-11, -36, 22, 24, 7); x.fill(); x.strokeStyle = '#d9cbb0'; x.lineWidth = 2; x.stroke();
     x.fillStyle = '#ff8a73'; x.fillRect(-11, -24, 22, 4);
@@ -214,16 +241,37 @@ function stairsGame(k, p) {
     x.fillStyle = '#3a2f45'; x.beginPath(); x.arc(5, -49, 1.8, 0, 6.3); x.fill();
     x.fillStyle = '#e8c66a'; x.beginPath(); x.ellipse(0, -58, 18, 5, 0, 0, 6.3); x.fill(); x.beginPath(); x.arc(0, -60, 9, Math.PI, 0); x.fill();
     x.restore();
+    }
     // the time bar and the count
     x.fillStyle = 'rgba(255,248,232,.92)'; x.beginPath(); x.roundRect(16, 14, W - 32, 22, 11); x.fill();
     x.fillStyle = bar > 0.3 ? '#7fdab0' : '#ff8a73'; x.beginPath(); x.roundRect(19, 17, Math.max(0, (W - 38) * bar), 16, 8); x.fill();
     x.fillStyle = '#fff8e8'; x.strokeStyle = '#4a3d6b'; x.lineWidth = 5; x.font = '800 40px sans-serif'; x.textAlign = 'center';
-    x.strokeText(`${pos} / ${GOAL}`, W / 2, 80); x.fillText(`${pos} / ${GOAL}`, W / 2, 80);
+    const cnt = SKY ? `${pos}` : `${pos} / ${GOAL}`; x.strokeText(cnt, W / 2, 80); x.fillText(cnt, W / 2, 80);
+    if (SKY) { x.font = '700 15px sans-serif'; x.lineWidth = 4; const t2 = `최고 ${best}칸`; x.strokeText(t2, W / 2, 102); x.fillText(t2, W / 2, 102); }
     if (!run && !over && pos === 0) { x.font = '700 17px sans-serif'; x.fillStyle = '#fff8e8'; x.strokeStyle = 'rgba(46,37,89,.8)'; x.lineWidth = 4;
-      ['⬆ 오르기: 보는 쪽으로 한 칸', '⇄ 방향 바꾸기: 돌아서 한 칸', '누르면 시작! (키보드 ← →)'].forEach((t, i) => { x.strokeText(t, W / 2, 118 + i * 24); x.fillText(t, W / 2, 118 + i * 24); }); }
+      (SKY ? ['끝없는 우주 계단! 어디까지 갈까?', '⬆ 오르기 · ⇄ 방향 바꾸기', '높이 갈수록 시간이 빨리 줄어요'] : ['⬆ 오르기: 보는 쪽으로 한 칸', '⇄ 방향 바꾸기: 돌아서 한 칸', '누르면 시작! (키보드 ← →)']).forEach((t, i) => { x.strokeText(t, W / 2, 118 + i * 24); x.fillText(t, W / 2, 118 + i * 24); }); }
     raf = requestAnimationFrame(loop);
   };
   fresh(); raf = requestAnimationFrame(loop);
+}
+function drawSpace(x, W, H, camY, SH) { // 우주 계단 배경: 별 세 겹(멀수록 느리게), 발밑의 지구, 오르다 만나는 행성들
+  const g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#0b0820'); g.addColorStop(1, '#231a5c'); x.fillStyle = g; x.fillRect(0, 0, W, H);
+  let s0 = 9; const rr = () => { s0 = (s0 * 16807) % 2147483647; return s0 / 2147483647; };
+  [[40, 0.04, 0.8], [30, 0.1, 1.3], [16, 0.22, 1.9]].forEach(([n, sp, r]) => { for (let i = 0; i < n; i++) { const sx = rr() * W, sy = (rr() * H + camY * SH * sp) % H; x.fillStyle = `rgba(255,246,216,${0.35 + rr() * 0.6})`; x.beginPath(); x.arc(sx, sy, r * (0.6 + rr() * 0.5), 0, 6.3); x.fill(); } });
+  x.fillStyle = 'rgba(205,180,255,.08)'; x.beginPath(); x.ellipse(W * 0.3, (H * 0.3 + camY * SH * 0.05) % (H * 1.4) - H * 0.2, 160, 60, -0.4, 0, 6.3); x.fill(); // 은하수 한 줄기
+  const ey = H + 160 + camY * SH * 0.35; if (ey - 300 < H) { // 발밑의 지구: 오를수록 아래로 멀어진다
+    x.fillStyle = '#5fa8f0'; x.beginPath(); x.arc(W / 2, ey, 300, 0, 6.3); x.fill();
+    x.fillStyle = '#7fd69a'; [[-120, -250, 60], [60, -270, 46], [150, -200, 40]].forEach(([dx, dy, r]) => { x.beginPath(); x.ellipse(W / 2 + dx, ey + dy, r, r * 0.45, 0.2, 0, 6.3); x.fill(); });
+    x.strokeStyle = 'rgba(191,233,255,.5)'; x.lineWidth = 10; x.beginPath(); x.arc(W / 2, ey, 306, 0, 6.3); x.stroke();
+  }
+  SKY_SIGHTS.forEach(([at, name, col], i) => { // 그 칸에 다다를 즈음 옆으로 지나가는 것들
+    const y = H * 0.68 - (at - camY) * SH * 0.5, side = i % 2 ? W - 62 : 62; if (y < -90 || y > H + 90) return;
+    const R = i < 2 ? 14 : 30 + Math.min(i, 6) * 2;
+    if (i < 2) { x.fillStyle = col; x.fillRect(side - 6, y - 6, 12, 12); x.fillStyle = '#5b7fd6'; x.fillRect(side - 26, y - 4, 16, 8); x.fillRect(side + 10, y - 4, 16, 8); }
+    else { x.fillStyle = col; x.beginPath(); x.arc(side, y, R, 0, 6.3); x.fill(); x.fillStyle = 'rgba(0,0,0,.18)'; x.beginPath(); x.arc(side + R * 0.35, y + R * 0.2, R * 0.85, 0, 6.3); x.fill();
+      if (name === '토성') { x.strokeStyle = '#d9c39a'; x.lineWidth = 4; x.beginPath(); x.ellipse(side, y, R * 1.7, R * 0.45, -0.3, 0, 6.3); x.stroke(); } }
+    x.font = '700 13px sans-serif'; x.textAlign = 'center'; x.fillStyle = '#fff8e8'; x.fillText(`${name} · ${at}칸`, side, y + R + 16);
+  });
 }
 function makeTower() { // 첨성대, drawn once: square base, a bottle-shaped body of stone courses, a window, the well-frame top
   const c = document.createElement('canvas'); c.width = 240; c.height = 1500; const x = c.getContext('2d'), cx = 120, top = 140, base = 1380;

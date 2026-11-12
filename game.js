@@ -8,6 +8,11 @@ const SHOP = Object.fromEntries(SHOPS.map(s => [s.id, s]));
 const GUIDE = '도장 로봇';
 let dyn = null, marker = null, COL = [], keepers = [], places = [], lineup = null, myShirt = 1, zoom = 1, zoomNow = 1;
 const me = () => state.actors[0];
+// 깍두기: 선생님이 반 친구들 사이에 들어와 같이 노는 캐릭터. 모든 게임을 순서 없이 해 볼 수 있고, 무엇이든 바로 통과할 수 있다.
+// 선생님 방의 [깍두기로 들어가기](주소 끝 &kk=1)로 들어오고, 선생님 암호를 한 번 넣는다.
+const KK_URL = params.get('kk') === '1';
+let KK = false;
+const kkOK = () => { try { return sessionStorage.getItem('sf:teacher') === '1'; } catch (e) { return false; } };
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 const pick = arr => arr[Math.floor(rng() * arr.length)];
@@ -97,8 +102,8 @@ function reset() {
     const a = { i: MP.on ? MP.slot : i, id: MP.on ? MP.id : 'a' + i, bot, name: bot ? BOT_NAMES[i - 1] : myName, shirt: SHIRTS[si], shirtName: SHIRT_NAMES[si], x: bot ? PLACES.spawn.x + Math.cos(ang) * rad * 1.6 : PLACES.spawn.x, z: bot ? PLACES.spawn.z + Math.sin(ang) * rad : PLACES.spawn.z, face: 0, moving: false,
       mission: bot ? pick(MISSIONS) : null, stage: 0, testStatus: 'none', eraTime: [], planStatus: 'none', parts: {}, order: [], away: {}, loose: false, doodle: false, shieldUntil: 0, prankReady: bot ? 60 + rng() * 120 : 0, lastVictim: '', tasks: [], pace: 0.7 + rng() * 0.9, launched: false, carry: null };
     a.h = gh(a.x, a.z); a.mesh = makeKid({ shirt: a.shirt, hair: a.i % 5, hairColor: HAIR[(a.i * 3) % HAIR.length] }); dyn.add(a.mesh);
-    placeWork(a);
-    a.tag = tag(a.name, bot ? '' : 'me'); state.actors.push(a);
+    a.kk = !bot && KK; placeWork(a);
+    a.tag = tag(a.kk ? '★ ' + a.name : a.name, bot ? '' : 'me'); state.actors.push(a);
   }
   if (n > 2) { const a = state.actors[1], f = eraParts(0)[1].id; a.parts[f] = true; a.order.push(f); a.pace = 1.6; } // the first minute's victim
   state.actors.forEach(refreshActor);
@@ -259,7 +264,7 @@ function waypoint(a, p) { // a later island is reached through this island's por
   const za = zoneOf(a.z); return zoneOf(p.z) > za && za < 3 && a.stage > za ? PORTAL[za] : p;
 }
 function warpTo(a, e) { // land on island e's arrival ring, a step to the side so friends do not stack
-  const A = ARRIVE[e], ang = rng() * 6.283, r = a.bot ? 1.5 + rng() * 2 : 0; sparkle(a.x, a.h, a.z);
+  const A = ARRIVE[e] || PLACES.spawn, ang = rng() * 6.283, r = a.bot ? 1.5 + rng() * 2 : 0; sparkle(a.x, a.h, a.z);
   a.x = A.x + Math.cos(ang) * r; a.z = A.z + Math.abs(Math.sin(ang)) * r * 0.6; a.h = gh(a.x, a.z); sparkle(a.x, a.h, a.z);
 }
 function warpBot(a) { warpTo(a, zoneOf(a.z) + 1); a.tasks.forEach(t => { t.pt = null; }); }
@@ -271,9 +276,9 @@ function liftOff(a) {
   const r = makeRocket(a.shirt); Object.values(r.userData.parts).forEach(p => { p.visible = true; }); ['oven', 'food', 'scan'].forEach(k => { r.userData.parts[k].visible = false; }); r.userData.ghost.visible = false;
   r.position.set(PLACES.launch.x, 0.4 + gh(PLACES.launch.x, PLACES.launch.z), PLACES.launch.z);
   const fl = mesh(geo('flame', () => new THREE.ConeGeometry(0.6, 2.2, 12)), glow(0xffb347), 0, -0.9, 0); fl.rotation.x = Math.PI; r.add(fl); dyn.add(r);
-  state.fx.push({ r, fl, t: 0 }); state.fame.push(a.name); state.hud = '';
-  if (a === me() && MP.on) MP.net.set('fame/' + MP.id, MP.net.now());
-  if (a !== me()) toast(`${a.name} 발사! (${state.fame.length}번째)`); sfx('launch'); events.push('launch:' + a.name);
+  state.fx.push({ r, fl, t: 0 }); if (!a.kk) state.fame.push(a.name); state.hud = ''; // 깍두기 선생님은 학생 순위에 끼지 않는다
+  if (a === me() && MP.on && !KK) MP.net.set('fame/' + MP.id, MP.net.now());
+  if (a !== me()) toast(a.kk ? `${a.name} 선생님 발사!` : `${a.name} 발사! (${state.fame.length}번째)`); sfx('launch'); events.push('launch:' + a.name);
 }
 
 // ---- What the player can do right here ---------------------------------------------------------
@@ -322,8 +327,27 @@ function doAction(n) {
   if (n.kind === 'pad') otherPad(n.ref);
   if (n.kind === 'launch') launchCheck();
 }
+// ---- 깍두기(선생님) 전용 ----------------------------------------------------------------------------
+function kkPlanOK() { const m = me(); if (!m.mission) m.mission = pick(MISSIONS); if (!state.plan.ship) state.plan.ship = '선생님호'; m.planStatus = 'ok'; state.hud = ''; }
+function kkTravel() { // 섬과 섬 사이를 마음대로: 지나온 시대의 게임도 다시 해 볼 수 있게
+  const here = zoneOf(me().z), names = ['석기 시대 섬', '철기 시대 섬', '산업 시대 섬', '우주 마을'];
+  ask('시간 이동 · 깍두기', '어느 시대로 갈까요? (지금 있는 곳: ' + names[here] + ')', names.map((n, e) => ({ label: n, off: e === here, fn: () => { state.warp = { t: 0, to: e }; sfx('warp'); } })).concat([{ label: '그냥 있을래' }]));
+}
+function kkKeeper(k) { // 가게 게임을 순서 · 시대 상관없이 해 보고, 지금 시대 것은 바로 받을 수도
+  const m = me(), mine = PARTS.filter(p => p.shop === k.id), need = p => p.era === m.stage && !m.parts[p.id] && !state.bag.includes(p.id), opts = [];
+  mine.forEach(p => {
+    opts.push({ label: `${p.item} 게임 해 보기`, sub: need(p) ? '이기면 가방에 들어가요' : '연습 (가방에는 안 들어가요)', fn: () => playPart(k, p) });
+    if (need(p)) opts.push({ label: `${p.item} 바로 받기`, sub: '깍두기 통과', fn: () => giveItem(k, p) });
+  });
+  ask(k.name + ' · 깍두기', `선생님 어서 오세요! ${SHOP[k.id].name}에서는 이런 게임을 해요.`, opts.concat([{ label: '그냥 갈래' }]));
+}
 function deskTalk() {
   const m = me();
+  if (KK) return ask(GUIDE + ' · 깍두기', '선생님, 무엇을 할까요?', (m.planStatus === 'ok'
+    ? [{ label: '내 계획서 보기', fn: () => ask(GUIDE, planHtml(state.plan, m.mission.name) + '<span class="stamp ok">승인 도장</span>', [{ label: '닫기' }], null, true) }]
+    : [{ label: '계획서 써 보기', sub: '내면 바로 도장', fn: () => { if (!m.mission) m.mission = pick(MISSIONS); planForm(); } },
+      { label: '계획서 바로 통과', sub: '깍두기 통과', fn: () => { kkPlanOK(); toast('깍두기 통과! 계획서 도장 쾅', 'good'); sfx('stamp'); } }])
+    .concat([{ label: '다른 시대로 시간 이동', fn: kkTravel }, { label: '그냥 갈래' }]));
   if (!m.mission) return say(GUIDE, ['어서 와! 여긴 탐사 본부야.', '먼저 광장의 뽑기 기계에서 임무 카드를 뽑아 와. 계획서는 그다음!']);
   if (m.planStatus === 'none' || m.planStatus === 'back') return planForm();
   if (m.planStatus === 'sent') return ask(GUIDE, '계획서는 선생님께 갔어. 도장이 찍히면 제작을 시작할 수 있어!', [{ label: '선생님께 보여 드리기', sub: '선생님 암호가 필요해', fn: () => teacherReview(3) }, { label: '고쳐서 다시 내기', fn: planForm }, { label: '기다릴게' }]);
@@ -346,6 +370,7 @@ function planForm() {
     read(); let ok = true;
     PLAN_FIELDS.forEach(p => { const bad = state.plan[p.key].length < (p.short ? 1 : tune.plan_min_chars); $('f_' + p.key).classList.toggle('bad', bad); if (bad) ok = false; });
     if (!ok) { sfx('bad'); toast(`빈칸을 채워 줘 (칸마다 ${tune.plan_min_chars}자 이상)`, 'bad'); return; }
+    if (KK) { closeUI(); kkPlanOK(); toast('깍두기 통과! 계획서 도장 쾅', 'good'); sfx('stamp'); return; }
     m.planStatus = 'sent'; state.planNote = ''; pushReq(m, 3); closeUI(); sfx('pop'); events.push('plan-sent');
     say(GUIDE, ['계획서 접수! 선생님께 전달했어.', '도장이 찍힐 때까지 마을을 둘러봐. 친구 작업장에 가면 친구 계획서도 엿볼 수 있어.']);
   };
@@ -364,6 +389,10 @@ function decide(e, st, c) {
 }
 function chiefTalk(e) { // the gatekeeper of each early era: the story, then the test
   const m = me(), E = ERAS[e];
+  if (KK) { state.met[e] = true; const miss = eraMissing(m);
+    return ask(E.chief + ' · 깍두기', m.stage === e ? `선생님 어서 오세요! 이 시대의 시험은 "${E.test.title}"이에요.${miss.length ? ` (아직 안 만든 것 ${miss.length}개)` : ''}` : '선생님, 이 섬에서 무엇을 할까요?',
+      (m.stage === e ? [{ label: '그림 시험 보기', sub: '내면 바로 통과', fn: () => testForm(e) }, { label: '바로 다음 시대로', sub: '깍두기 통과 · 포탈이 열려요', fn: () => advance(m) }] : [])
+        .concat([{ label: '다른 시대로 시간 이동', fn: kkTravel }, { label: '그냥 갈래' }])); }
   if (m.stage > e) return say(E.chief, ['너는 벌써 이 시대를 지나갔지! 아직 여기 있는 친구들을 응원해 줘.']);
   if (!state.met[e]) { state.met[e] = true; return say(E.chief, E.intro); }
   if (m.carry) return say(E.chief, ['손에 든 그거, 네 것 아니지? 그것부터 어떻게 해!']);
@@ -407,12 +436,14 @@ function testForm(e) { // the early eras end in a drawing and its title; the tea
     read();
     if (!drawn) { sfx('bad'); toast('먼저 그림을 그려 줘!', 'bad'); return; }
     if (!d.title) { sfx('bad'); $('t_title').classList.add('bad'); toast('그림 제목을 붙여 줘!', 'bad'); return; }
+    if (KK) { closeUI(); return advance(m); } // 깍두기: 선생님이 선생님께 낼 필요는 없으니 바로 통과
     m.testStatus = 'sent'; state.testNote = ''; pushReq(m, e); closeUI(); sfx('pop'); events.push('test-sent:' + e);
     say(ERAS[e].chief, ['멋진 그림이야! 선생님께 보냈어.', '선생님 OK를 기다리는 동안 친구를 도와도 되고… 살짝 장난을 쳐도 돼. 쉿!']);
   };
 }
 function keeperTalk(k) {
   const m = me(), s = SHOP[k.id], mine = PARTS.filter(p => p.shop === k.id);
+  if (KK) return kkKeeper(k);
   if (s.era < m.stage) return say(k.name, ['오, 너는 벌써 이 시대를 지나갔구나!', `${ERAS[m.stage].name}에서도 힘내!`]);
   if (s.era < 3 && !state.met[s.era]) return say(k.name, [`잠깐! 먼저 언덕 위 ${ERAS[s.era].chief}에게 인사하고 와.`, '그래야 무엇을 만들지 알 수 있지!']);
   if (m.stage === 3 && m.planStatus !== 'ok') return say(k.name, [`${s.name}에 어서 와!`, `${mine.map(p => p.item).join(', ')}… 다 있지. 하지만 계획서에 도장을 받아야 줄 수 있어.`]);
@@ -422,6 +453,9 @@ function keeperTalk(k) {
   if (!p) return say(k.name, [m.stage < 3 ? `필요한 건 다 챙겼네! 네 자리에서 만들고 ${ERAS[m.stage].chief}에게 시험을 보러 가.` : '필요한 건 다 챙겼네! 작업장에서 조립하고 발사대로 가 봐.']);
   if (p.shop !== k.id) { sfx('bad'); return say(k.name, [`잠깐, 순서가 있어! 지금은 ${josa(p.name, '을', '를')} 만들 차례야.`, `${SHOP[p.shop].name}에 가서 ${josa(p.item, '을', '를')} 먼저 구해 와. 우리 가게는 그다음이야!`]); }
   if (state.bag.length >= tune.bag_size) return say(k.name, [`가방이 꽉 찼잖아! 네 ${ER(m).work}에 가서 먼저 만들고 와.`]);
+  playPart(k, p);
+}
+function playPart(k, p) { // the shop's game for one part; winning it gives the item
   if (p.kind === 'word' || p.kind === 'num') return typedQuiz(k, p);
   if (p.kind === 'nono') return nonoGame(k, p);
   if (p.kind === 'moon') return moonQuiz(k, p);
@@ -435,6 +469,7 @@ function keeperTalk(k) {
   } })));
 }
 function giveItem(k, p) { // into the bag; a full bag sends you off to build
+  const mm = me(); if (KK && (p.era !== mm.stage || mm.parts[p.id] || state.bag.includes(p.id))) { sfx('ok'); return say(k.name, [p.fact, '연습 성공! (지금 시대 물건이 아니라 가방에는 넣지 않았어요)']); }
   state.bag.push(p.id); state.hud = ''; sfx('ok'); events.push('item:' + p.id); state.tries[p.id] = 0;
   const full = state.bag.length >= tune.bag_size, W = ER(me()).work;
   say(k.name, [p.fact, full ? `자, ${p.item}! 가방이 꽉 찼어(${state.bag.length}/${tune.bag_size}). 얼른 네 ${W}에 가서 만들어!` : `자, ${p.item}! 네 ${W}에서 ${josa(p.name, '을', '를')} 만들어.`]);
@@ -525,6 +560,8 @@ function launchCheck() {
   if (m.planStatus !== 'ok') miss.push('계획서 도장');
   ['suit', 'ship', 'cargo'].forEach(g => { const all = PARTS.filter(p => p.group === g), got = all.filter(p => m.parts[p.id]).length; if (got < all.length) miss.push(`${{ suit: '우주복', ship: '우주선', cargo: '짐' }[g]} ${got}/${all.length}`); });
   if (m.loose) miss.push('풀린 나사'); if (m.doodle) miss.push('낙서');
+  const fly = () => { if (!state.plan.ship) state.plan.ship = '선생님호'; if (!m.mission) m.mission = pick(MISSIONS); liftOff(m); state.launching = { t: 0 }; };
+  if (KK) return ask('발사 관제탑 · 깍두기', miss.length ? `아직 부족한 것: ${miss.join(', ')}<br>선생님은 그래도 발사할 수 있어요.` : '모든 점검 통과! 발사할까요?', [{ label: '발사!', sub: miss.length ? '깍두기 통과' : '', fn: fly }, { label: '아직' }]);
   if (miss.length) return say('발사 관제탑', [`발사 점검 결과… 아직이야! (${n}/10)`, `부족한 것: ${miss.join(', ')}`]);
   ask('발사 관제탑', `모든 점검 통과! <b>${esc(state.plan.ship)}</b>, 발사할까?`, [{ label: '발사!', fn: () => { liftOff(m); state.launching = { t: 0 }; } }, { label: '아직' }]);
 }
@@ -604,7 +641,8 @@ function quest() {
 function setScene(s) {
   scene = s; const play = s === 'play' || s === 'pause';
   ['parts', 'quest', 'top', 'bag', 'act', 'stick', 'toasts', 'zoomer', 'eraBanner'].forEach(id => $(id).classList.toggle('hide', !play));
-  $('title').classList.toggle('hide', s !== 'title'); $('pause').classList.toggle('hide', s !== 'pause'); $('results').classList.toggle('hide', s !== 'results');
+  $('title').classList.toggle('hide', s !== 'title'); $('pause').classList.toggle('hide', s !== 'pause'); $('results').classList.toggle('hide', s !== 'results'); $('lobby').classList.toggle('hide', s !== 'lobby');
+  if (s === 'title') $('bSkyT').classList.toggle('hide', !skyOpen());
   if (s !== 'play') { $('ring').classList.add('hide'); $('prompt').style.transform = 'translate(-999px,0)'; }
   if (s === 'figures') buildLineup();
 }
@@ -612,17 +650,33 @@ function start() {
   const room = ($('roomIn').value || '').replace(/\D/g, '').slice(0, 6);
   if (MP.on) return location.reload(); // a new game in a room: come back in fresh
   if ($('bStart').disabled) return; // already joining
+  if (KK_URL && !KK) { // 깍두기 선생님: 암호 한 번
+    if (!kkOK()) { if (!pinOK($('kkPin').value)) { $('joinMsg').textContent = '선생님 암호가 달라요.'; $('kkPin').value = ''; sfx('bad'); return; } try { sessionStorage.setItem('sf:teacher', '1'); } catch (e) { /* fine */ } }
+    KK = true; $('kkPin').blur();
+  }
   if (!room) { reset(); setScene('play'); sfx('ok'); return; }
   const msg = $('joinMsg'), b = $('bStart'); b.disabled = true; msg.textContent = '연결 중…';
   mpJoin(room, t => { msg.textContent = t; }).then(mode => {
-    let beat = 0; // 기다리는 동안에도 '들어왔어요' 신호를 보내 선생님 방에 이름이 보이게
-    const go = () => { clearInterval(beat); msg.textContent = ''; setScene('play'); sfx('ok'); toast(`${room}번 방 · 출발! (${mode === 'rest' ? '직접 연결' : '실시간 연결'}) 반 친구들과 함께 시간 여행 시작`, 'good'); };
-    if (MP.go) return go(); // 이미 시작한 방(늦게 온 친구 · 새로고침)은 바로
-    msg.textContent = `${room}번 방에 들어왔어! 선생님이 [다같이 시작]을 누르면 모두 함께 출발해요.`; sfx('blip');
+    let beat = 0; // 대기실에서도 '들어왔어요' 신호를 보내 선생님 방과 친구 대기실에 이름이 보이게
+    const play = () => { setScene('play'); sfx('ok'); toast(`${room}번 방 · 출발! (${mode === 'rest' ? '직접 연결' : '실시간 연결'}) 반 친구들과 함께 시간 여행 시작`, 'good'); };
+    const go = () => { clearInterval(beat); msg.textContent = ''; if (scene !== 'lobby') return play(); $('lbWait').innerHTML = '<b style="font-size:54px;color:#2f9e77">출발!</b>'; sfx('ok'); setTimeout(play, 900); };
+    if (MP.go || KK) return go(); // 이미 시작한 방(늦게 온 친구 · 새로고침)과 깍두기 선생님은 바로
+    msg.textContent = ''; $('lbRoom').textContent = room; $('lbMe').textContent = me().name; lobbyDraw(); setScene('lobby'); sfx('blip');
     beat = setInterval(mpTick, 500); MP.onGo = go;
   })
     .catch(e => { console.warn('join', e && e.message); b.disabled = false; msg.textContent = (e && e.message === 'block' ? '학교 인터넷이 게임 서버를 막고 있어요.' : '게임 서버가 대답하지 않아요.') + ' [시작]을 한 번 더 눌러 보거나, 방 번호를 비우고 혼자 해 보세요.'; });
 }
+// 대기실: 방에 들어온 친구들 이름이 하나씩 늘어나고, 선생님이 [다같이 시작]을 누르면 "출발!"
+function lobbyDraw() {
+  const now = MP.net ? MP.net.now() : 0, others = Object.entries(MP.players || {}).filter(([id, p]) => id !== MP.id && p && live(MP.pos[id], now)).map(([, p]) => p);
+  const kids = others.filter(p => !p.kk), kk = others.some(p => p.kk), chip = (n, c) => `<span class="lbChip ${c}">${esc(n)}</span>`;
+  const html = chip(me().name + ' (나)', 'me') + (kk ? chip('★ 선생님', 'kk') : '') + kids.map(p => chip(p.n, '')).join('');
+  $('lbCount').textContent = `들어온 친구 ${kids.length + 1}명`;
+  if ($('lbNames').dataset.h !== html) { $('lbNames').dataset.h = html; $('lbNames').innerHTML = html; }
+}
+// 우주 무한 계단: 우주선을 발사(탈출)한 학생에게 열린다. 이 기기에 기억해 두어 다음에 첫 화면에서도 할 수 있다.
+function skyOpen() { try { return localStorage.getItem('sf:sky') === '1'; } catch (e) { return false; } }
+function skyStairs() { const back = scene; setScene('sky'); stairsGame({ name: me().name }, null, () => setScene(back)); }
 function setZoom(dir) { zoom = Math.max(tune.zoom_min, Math.min(tune.zoom_max, zoom * Math.pow(tune.zoom_step, dir))); if (Math.abs(zoom - 1) < 0.12) zoom = 1; }
 const SKIES = [[0xf5c79a, 0xf6d3b0], [0xa9dcf2, 0xc9e8f2], [0x9fbbe0, 0xbccbe2], [0x2e2559, 0x6c5fa8]]; // dusk, spring sky, hazy sky, space
 function showIsland(e) { // only one island is drawn at a time; each has its own sky
@@ -704,11 +758,14 @@ function playStep(dt) {
 function finish() {
   const m = me(), mine = MP.fame[MP.id], rank = MP.on && mine ? 1 + Object.values(MP.fame).filter(t => t < mine).length : state.fame.indexOf(m.name) + 1;
   state.gained = `${rank}번째로 발사 성공! 임무: ${m.mission.name}`; state.score = 10;
+  try { localStorage.setItem('sf:sky', '1'); } catch (e) { /* 저장이 안 돼도 이번 화면에서는 할 수 있다 */ }
   const trip = ERAS.slice(0, 3).map((E, i) => `${E.name} ${fmt(m.eraTime[i] || 0)}`).join(' → ') + ` → 발사 ${fmt(state.t)}`;
-  $('results').innerHTML = `<div class="panel"><b style="font-size:30px">발사 성공! ${state.actors.length}명 중 ${rank}번째로 우주에 나갔어요</b><div style="font-size:16px;color:#8a7fa8;margin:4px 0 8px">시간 여행 기록: ${trip}</div><canvas id="pic" width="1400" height="560"></canvas>
-    <div style="margin-top:10px"><b>${esc(state.plan.ship)}</b>의 임무 일지 · ${m.mission.name}</div><div style="font-weight:400;font-size:18px">${esc(state.plan.what)}</div>
-    <div style="margin-top:8px">명예의 전당</div><ol id="fame">${state.fame.map(n => `<li>${esc(n)}</li>`).join('')}</ol></div><button class="big" id="bAgain">다시 하기 (Enter)</button>`;
-  drawMission($('pic').getContext('2d'), m.mission.id, 1400, 560); $('bAgain').onclick = start;
+  const kids = state.actors.filter(a => !a.kk).length, head = KK ? '깍두기 선생님, 발사 성공!' : `발사 성공! ${kids}명 중 ${rank}번째로 우주에 나갔어요`;
+  $('results').innerHTML = `<div class="panel"><b style="font-size:30px">${head}</b><div style="font-size:16px;color:#8a7fa8;margin:4px 0 8px">시간 여행 기록: ${trip}</div><canvas id="pic" width="1400" height="560"></canvas>
+    <div style="margin-top:10px"><b>${esc(state.plan.ship || '')}</b>의 임무 일지 · ${m.mission.name}</div><div style="font-weight:400;font-size:18px">${esc(state.plan.what || '')}</div>
+    <div style="margin-top:8px">명예의 전당</div><ol id="fame">${state.fame.map(n => `<li>${esc(n)}</li>`).join('')}</ol></div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center"><button class="big" id="bSky" style="background:#8fd3ff;box-shadow:0 6px 0 #4f8fc0">우주 무한 계단 도전!</button><button class="big" id="bAgain">다시 하기 (Enter)</button></div>`;
+  drawMission($('pic').getContext('2d'), m.mission.id, 1400, 560); $('bAgain').onclick = start; $('bSky').onclick = skyStairs;
   setScene('results'); sfx('ok');
 }
 function drawWorld() {
@@ -741,7 +798,7 @@ function drawHud() {
   const key = [state.questText, m.stage, mates, PARTS.map(p => m.parts[p.id] ? 1 : state.bag.includes(p.id) ? 2 : 0).join(''), state.bag.join(), state.fame.length, state.toasts.map(t => t.msg).join('|')].join('#');
   if (key === state.hud) return; state.hud = key;
   $('quest').textContent = state.questText;
-  $('rank').textContent = `발사 ${state.fame.length}/${state.actors.length}`;
+  $('rank').textContent = `발사 ${state.fame.length}/${state.actors.filter(a => !a.kk).length}`;
   $('eraLine').textContent = `${E.name} ${count(m)}/${total(m)} · 같은 시대 친구 ${mates}명`;
   const P = $('partIcons'), EP = eraParts(m.stage); if (P.dataset.era !== String(m.stage)) { P.dataset.era = m.stage; P.innerHTML = ''; EP.forEach(p => { const c = document.createElement('canvas'); c.width = c.height = 68; P.appendChild(c); icon(c.getContext('2d'), p.id); }); }
   EP.forEach((p, i) => { P.children[i].className = m.parts[p.id] ? 'on' : state.bag.includes(p.id) ? '' : 'off'; });
@@ -751,12 +808,17 @@ function drawHud() {
 const scenes = {
   figures: { update(dt) { state.t += dt; }, draw() { showIsland(3); W3.stages[3].visible = false; W3.cam.position.set(0, 5, -374); W3.cam.lookAt(0, 1.7, -400); BEND.uCamZ.value = -450; W3.r.render(W3.scene, W3.cam); lineup.forEach((f, i) => { const p = toScreen(f.x, -0.25 - (i % 2) * 0.75, -400); f.tag.style.transform = `translate(${Math.round(p.x)}px,${Math.round(p.y)}px) translate(-50%,0)`; }); } },
   title: {
-    update(dt) { state.t += dt; W3.planet.position.x = 150 - (state.t * 1.2) % 300; W3.anim.forEach(f => f(state.t)); state.actors.forEach(a => { a.mesh.position.set(a.x, a.h, a.z); a.mesh.visible = zoneOf(a.z) === 0; animateKid(a.mesh, false, dt, state.t); }); zoomNow = 1; view(PLACES.spawn.x, PLACES.spawn.z - 3); if (pressed('Enter') || pressed('Space')) start(); },
+    update(dt, lobby) { state.t += dt; W3.planet.position.x = 150 - (state.t * 1.2) % 300; W3.anim.forEach(f => f(state.t)); state.actors.forEach(a => { a.mesh.position.set(a.x, a.h, a.z); a.mesh.visible = zoneOf(a.z) === 0; animateKid(a.mesh, false, dt, state.t); }); zoomNow = 1; view(PLACES.spawn.x, PLACES.spawn.z - 3); if (!lobby && (pressed('Enter') || pressed('Space'))) start(); },
     draw() { drawWorld(); },
   },
   play: { update: playStep, draw() { drawWorld(); drawHud(); } },
   pause: { update() { if (pressed('KeyP') || pressed('Escape') || pressed('Enter')) setScene('play'); }, draw() { drawWorld(); } },
-  results: { update(dt) { state.t += dt; if (pressed('Enter')) start(); }, draw() { drawWorld(); } },
+  results: { update(dt) { state.t += dt; mpTick(); if (pressed('Enter')) start(); }, draw() { drawWorld(); } }, // 발사한 뒤에도 방에 남아 있다는 신호
+  lobby: {
+    update(dt) { scenes.title.update.call(null, dt, true); if ((state.lobbyT = (state.lobbyT || 0) + dt) > 0.5) { state.lobbyT = 0; lobbyDraw(); } },
+    draw() { drawWorld(); },
+  },
+  sky: { update() { mpTick(); }, draw() { /* 계단 놀이가 화면을 덮고 있으니 3D는 쉰다 (디벗 배터리) */ } },
 };
 
 // ---- The figures sheet: every kind of figure side by side, named ---------------------------------
@@ -831,6 +893,13 @@ $('act').addEventListener('pointerdown', e => { e.preventDefault(); hit.add('Spa
   el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
 })();
 
+function titleInit() { // 첫 화면: 깍두기 선생님 표시, 우주 무한 계단 버튼
+  $('bSkyT').onclick = skyStairs; $('bLeave').onclick = () => location.reload();
+  if (!KK_URL) return;
+  $('kkBox').classList.remove('hide'); if (!$('nameIn').value) $('nameIn').value = '선생님';
+  if (kkOK()) $('kkPin').classList.add('hide'); else $('kkPin').setAttribute('style', $('kkPin').getAttribute('style') + ';' + PIN_CSS);
+  $('bStart').textContent = '깍두기로 들어가기 (Enter)';
+}
 // ---- The teacher's page (?teacher=1): every plan sent in this browser ------------------------------
 function teacherPage() {
   $('ui').classList.add('hide'); $('game').classList.add('hide');

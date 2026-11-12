@@ -143,6 +143,10 @@ const PLACES = {
 const PAD_SPOTS = [[], [], [], []];
 ERA_Z.forEach((zc, e) => [0, 1, 2, 3, 4, 5].forEach(r => [0, -6, 6, -12, 12].forEach(x => PAD_SPOTS[e].push({ x, z: zc - 10 + r * 5.6 }))));
 [13, 21, 29, 37, 45, 53].forEach(z => [0, -6.5, 6.5, -13, 13].forEach(x => PAD_SPOTS[3].push({ x, z })));
+// 31번째 자리(번호 30): 깍두기 선생님의 작업장. 학생 30명 자리와 겹치지 않게 오른쪽 끝에
+const KK_SLOT = 30;
+ERA_Z.forEach((zc, e) => PAD_SPOTS[e].push({ x: 18, z: zc + 4 }));
+PAD_SPOTS[3].push({ x: 19.5, z: 33 });
 // Places to hide a taken thing, per era; the first chest_count of each era are treasure chests.
 const HIDE_SPOTS = [
   { era: 3, x: -14, z: -30 }, { era: 3, x: 15, z: -32 }, { era: 3, x: -31, z: -1 }, { era: 3, x: 31, z: 13 }, { era: 3, x: -31, z: 13 },

@@ -205,13 +205,13 @@ function prank(by, v, kind) {
   by.prankReady = state.t + tune.prank_cooldown; by.lastVictim = v.id; v.shieldUntil = state.t + tune.pad_shield; footprints(by, v);
   if (v.remote) { // a classmate: their tablet applies it; I just run off with the thing
     const part = kind === 'hide' ? v.order[v.order.length - 1] : '';
-    if (kind === 'hide') { by.carry = { owner: v.id, part }; refreshActor(by); }
+    if (kind === 'hide') { by.carry = { owner: v.id, part }; by.carryAt = state.t; refreshActor(by); }
     mpSend(v.id, { k: kind, by: by.id, part }); events.push('prank:' + kind); return;
   }
   let what = '';
   if (kind === 'loose') { v.loose = true; what = ERAS[v.stage].loose.done; }
   if (kind === 'doodle') { v.doodle = true; what = ERAS[v.stage].doodle.done; }
-  if (kind === 'hide') { const id = v.order.pop(); delete v.parts[id]; v.away[id] = true; by.carry = { owner: v.id, part: id }; what = `${josa(PART[id].name, '이', '가')} 사라졌다!`; refreshActor(by); }
+  if (kind === 'hide') { const id = v.order.pop(); delete v.parts[id]; v.away[id] = true; by.carry = { owner: v.id, part: id }; by.carryAt = state.t; what = `${josa(PART[id].name, '이', '가')} 사라졌다!`; refreshActor(by); }
   refreshActor(v); events.push('prank:' + kind);
   if (v === me()) { toast(`내 ${ERAS[v.stage].work}: ${what} ${by.shirtName}색 발자국이 남았어`, 'bad'); sfx('alarm'); }
 }
@@ -262,8 +262,20 @@ function planPrank(a, v, via) {
     if (k === 'hide') { const spot = pick(HIDE_SPOTS.filter(h => h.era === v.stage)), chest = state.chests.find(c => c.x === spot.x && c.z === spot.z); if (via) a.tasks.push(go(via)); a.tasks.push(go({ x: spot.x, z: spot.z + 1.5 }), act(() => { if (a.carry) stash(a, a.x, a.z, chest); })); }
   }));
 }
+function carryStep() { // 들고 튄 지 30초가 지나면 그 자리에 툭 떨어진다 (반짝이니 주인이 찾을 수 있다)
+  state.actors.forEach(a => {
+    if (a.remote || !a.carry || state.t - (a.carryAt || 0) < tune.carry_max) return;
+    const p = a.carry.part; stash(a, a.x, a.z, null);
+    if (a === me()) { toast(`${tune.carry_max}초가 지나 ${josa(PART[p].name, '이', '가')} 손에서 툭 떨어졌어!`, 'bad'); sfx('bad'); }
+  });
+}
+function caught(a) { // 현장에서 잡힌 범인: 꼼짝 마! (잡힌 동안은 가게 게임 · 대화로도 시간을 못 보낸다: 바깥에서만 줄어든다)
+  a.frozen = tune.caught_freeze; a.moving = false; a.tasks.length = 0;
+  if (a === me()) { state.act = null; state.hud = ''; }
+}
 function botStep(a, dt) {
   if (a.launched) return;
+  if (a.frozen > 0) { a.frozen -= dt; a.moving = false; return; }
   if (!a.tasks.length) botThink(a);
   const k = a.tasks[0]; if (!k) { a.moving = false; return; }
   if (k.go) {
@@ -338,7 +350,7 @@ function doAction(n) {
     else if (n.ref.items) say('보물상자', ['친구 물건이 들어 있다. 내 것은 아니니 살짝 닫아 두자.']);
     else { toast('텅 빈 보물상자다. 물건을 숨기기 딱 좋겠는걸'); sfx('blip'); }
   }
-  if (n.kind === 'catch') { const a = n.ref, id = a.carry.part; if (a.remote) mpSend(a.id, { k: 'caught', by: m.id }); a.carry = null; a.tasks.length = 0; refreshActor(a); bagOnce(id); toast(`잡았다! ${josa(PART[id].name, '을', '를')} 되찾았어`, 'good'); sfx('ok'); }
+  if (n.kind === 'catch') { const a = n.ref, id = a.carry.part; if (a.remote) mpSend(a.id, { k: 'caught', by: m.id }); a.carry = null; a.tasks.length = 0; refreshActor(a); bagOnce(id); if (!a.remote) caught(a); toast(`잡았다! ${josa(PART[id].name, '을', '를')} 되찾았어. ${josa(a.name, '은', '는')} ${tune.caught_freeze}초 동안 꼼짝 마!`, 'good'); sfx('ok'); }
   if (n.kind === 'find') { unhide(n.ref); bagOnce(n.ref.part); toast(`${PART[n.ref.part].name} 찾았다! 작업장에 다시 달자`, 'good'); sfx('pop'); state.hud = ''; }
   if (n.kind === 'gacha') {
     if (!m.mission) { m.mission = pick(MISSIONS); sfx('ok'); events.push('mission:' + m.mission.id); }
@@ -635,7 +647,8 @@ function uiStep(dt) {
 function quest() {
   const m = me();
   if (state.launching) return { text: '발사!!' };
-  if (m.carry) return { text: '들고 튀어! 멀리 가서 바닥이나 보물상자에 숨기자' };
+  if (m.frozen > 0) return { text: `잡혔다! ${Math.ceil(m.frozen)}초 동안 꼼짝 마… (친구 물건은 주인에게 돌아갔어)` };
+  if (m.carry) return { text: `들고 튀어! ${Math.max(0, Math.ceil(tune.carry_max - (state.t - (m.carryAt || 0))))}초 안에 바닥이나 보물상자에 숨기자 (지나면 툭 떨어져)` };
   const E = ER(m), C = m.stage < 3 ? CHIEF_SPOT(m.stage) : null;
   const here = zoneOf(m.z); if (here < m.stage && here < 3) return Object.assign({ text: `선생님 OK! 언덕 위 시간의 포탈로 들어가 ${ERAS[here + 1].name}로 가자` }, PORTAL[here]);
   if (C) {
@@ -738,6 +751,9 @@ function playStep(dt) {
       if (a.kind === 'clean') { m.doodle = false; refreshActor(m); toast(ER(m).doodle.fixed, 'good'); sfx('ok'); }
       else { const id = state.bag.shift(); install(m, id); sfx('ok'); state.score = count(m); toast(`${PART[id].name} 완성! (${count(m)}/${total(m)})`, 'good'); events.push('built:' + id); if (state.bag.length) state.act = { kind: 'build', t: 0, dur: tune.build_time, label: `${PART[state.bag[0]].name} 만드는 중…` }; }
     }
+  } else if (m.frozen > 0) { // 잡힌 벌: 걷기도 행동도 못 한다
+    m.frozen -= dt; m.moving = false; state.near = null; if (m.frozen <= 0) { m.frozen = 0; toast('이제 움직일 수 있어. 다음엔 친구 물건 말고 내 것을 만들자!', ''); }
+    if (pressed('Equal') || pressed('NumpadAdd')) setZoom(-1); if (pressed('Minus') || pressed('NumpadSubtract')) setZoom(1);
   } else {
     let dx = state.joy.x, dz = state.joy.z;
     if (down.has('ArrowLeft') || down.has('KeyA')) dx -= 1; if (down.has('ArrowRight') || down.has('KeyD')) dx += 1;
@@ -753,7 +769,7 @@ function playStep(dt) {
     state.staged = true; const th = state.actors[2], v = state.actors[1], pid = v.order[v.order.length - 1];
     if (pid && !canPrank(Object.assign({}, th, { prankReady: 0 }), v, 'hide')) { th.prankReady = 0; th.tasks.length = 0; planPrank(th, v, { x: PLACES.spawn.x - 1.5, z: PLACES.spawn.z - 3 }); th.tasks.push(act(() => toast(`어? ${josa(th.name, '이', '가')} ${v.name}의 ${josa(PART[pid].name, '을', '를')} 들고 튄다!`))); const t0 = th.tasks.pop(); th.tasks.splice(1, 0, t0); }
   }
-  state.actors.forEach(a => { if (a.bot) botStep(a, dt); }); mpMove(dt); mpTick();
+  carryStep(); state.actors.forEach(a => { if (a.bot) botStep(a, dt); }); mpMove(dt); mpTick();
   const fz = zoneOf(W3.focus.z); // only the island the camera is on is drawn
 
   keepers.forEach(k => { k.mesh.visible = zoneOf(k.z) === fz; }); state.chests.forEach(c => { c.g.visible = zoneOf(c.z) === fz; });
@@ -819,7 +835,7 @@ function drawWorld() {
 function drawHud() {
   const m = me(), n = state.near;
   const b = $('act'); b.textContent = n ? n.label : '행동'; b.classList.toggle('dim', !n);
-  const a = state.act; $('ring').classList.toggle('hide', !a); if (a) { $('ring').firstElementChild.textContent = a.label; $('ring').querySelector('b').style.width = Math.round(a.t / a.dur * 100) + '%'; }
+  const a = state.act || (m.frozen > 0 && !state.ui ? { label: `잡혔다! 꼼짝 마 ${Math.ceil(m.frozen)}초`, t: m.frozen, dur: tune.caught_freeze } : null); $('ring').classList.toggle('hide', !a); if (a) { $('ring').firstElementChild.textContent = a.label; $('ring').querySelector('b').style.width = Math.round(a.t / a.dur * 100) + '%'; }
   const E = ER(m), mates = state.actors.filter(a => a.stage === m.stage && !a.launched).length - 1;
   const key = [state.questText, m.stage, mates, PARTS.map(p => m.parts[p.id] ? 1 : state.bag.includes(p.id) ? 2 : 0).join(''), state.bag.join(), state.fame.length, state.toasts.map(t => t.msg).join('|')].join('#');
   if (key === state.hud) return; state.hud = key;

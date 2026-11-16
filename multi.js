@@ -147,6 +147,7 @@ function mpTick() {
     pa: Object.keys(m.parts).join(','), or: m.order.join(','), lo: m.loose ? 1 : 0, dd: m.doodle ? 1 : 0, ca: m.carry ? m.carry.owner + '|' + m.carry.part : '',
     la: m.launched ? 1 : 0, se: (m.stage < 3 ? m.testStatus : m.planStatus) === 'sent' ? 1 : 0, ps: m.planStatus, sd: state.t < m.shieldUntil ? 1 : 0, mi: m.mission ? m.mission.id : '' };
   if (KK) snap.kk = 1;
+  if (m.frozen > 0) snap.fz = 1;
   const s = JSON.stringify(snap);
   if (s === MP.sent && t - MP.sentAt < STATE_BEAT) return;
   MP.sent = s; MP.sentAt = t; snap.t = MP.net.now(); MP.net.set('p/' + MP.id, snap);
@@ -183,10 +184,12 @@ function mpSync() {
     const ca = p.ca ? { owner: p.ca.split('|')[0], part: p.ca.split('|')[1] } : null;
     if (JSON.stringify([parts, p.lo, p.dd, ca]) !== a.look) { a.look = JSON.stringify([parts, p.lo, p.dd, ca]); a.parts = parts; a.loose = !!p.lo; a.doodle = !!p.dd; a.carry = ca; refreshActor(a); }
     a.order = (p.or || '').split(',').filter(Boolean);
+    if (!!p.fz !== !!a.frozen) { a.frozen = p.fz ? 1 : 0; a.tag.textContent = (a.kk ? '★ ' : '') + a.name + (p.fz ? ' · 잡힘! 꼼짝 마' : ''); a.tag.classList.toggle('caught', !!p.fz); a.tag._w = a.tag.offsetWidth || a.tag._w; }
+    if (a.carry && !a.carryAt0) a.carryAt0 = now; if (!a.carry) a.carryAt0 = 0;
     if (p.la && !a.launched) liftOff(a);
     // 내 물건을 든 친구가 다른 시대 섬으로 갔거나 발사했으면(옛 버전 기기 등), 5초 뒤 내 가방으로 되돌린다
     if (a.carry && a.carry.owner === MP.id) {
-      const far = a.launched || zoneOf(a.tz) !== zoneOf(me().pad.z);
+      const far = a.launched || zoneOf(a.tz) !== zoneOf(me().pad.z) || now - a.carryAt0 > (tune.carry_max + 15) * 1000; // 옛 버전 기기가 오래 들고 있어도
       if (!far) a.farAt = 0; else if (!a.farAt) a.farAt = now; else if (now - a.farAt > 5000 && a.rescued !== p.ca) { a.rescued = p.ca; rescue(a); }
     }
   });
@@ -214,7 +217,7 @@ function mpSend(to, ev) { MP.net.set(`ev/${to}/${MP.id}_${Date.now().toString(36
 function mpEvents(list) {
   Object.entries(list || {}).forEach(([key, ev]) => {
     MP.net.del(`ev/${MP.id}/${key}`); const m = me(), by = state.actors.find(a => a.id === ev.by), E = ER(m);
-    if (ev.k === 'caught') { if (m.carry) { m.carry = null; refreshActor(m); toast(ev.auto ? '들고 있던 친구 물건은 주인에게 돌아갔어' : `${by ? by.name : '친구'}에게 잡혔다! 물건을 돌려줬어`, 'bad'); sfx('bad'); } return; }
+    if (ev.k === 'caught') { if (m.carry) { m.carry = null; refreshActor(m); if (!ev.auto) caught(m); toast(ev.auto ? '들고 있던 친구 물건은 주인에게 돌아갔어' : `${by ? by.name : '친구'}에게 잡혔다! 물건을 돌려줬어. ${tune.caught_freeze}초 동안 꼼짝 마!`, 'bad'); sfx('bad'); } return; }
     if (ev.k === 'back') { gotBack(ev.part, by ? by.name : ''); return; }
     if (m.launched) return;
     let what = '';

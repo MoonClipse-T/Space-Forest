@@ -36,6 +36,8 @@ window.CONFIG = {
 
   // Pranks
   prank_cooldown: { value: 45, min: 5, max: 180, step: 5 },      // seconds before the same kid can prank again
+  carry_max: { value: 30, min: 5, max: 120, step: 5 },          // 친구 물건을 들고 있을 수 있는 최대 시간(초): 지나면 그 자리에 툭 떨어진다
+  caught_freeze: { value: 30, min: 0, max: 90, step: 5 },        // 들고 튀다 주인에게 잡히면 꼼짝 못 하는 시간(초)
   pad_shield: { value: 35, min: 0, max: 180, step: 5 },          // seconds a pranked workshop is safe afterwards
   first_prank_min: { value: 180, min: 0, max: 600, step: 10 },   // seconds before bots may prank the player (the brief: 3 to 5 minutes)
   bot_prank_chance: { value: 0.3, min: 0, max: 1, step: 0.05 },  // chance a bot pranks instead of working, when it can
